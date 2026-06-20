@@ -37,11 +37,23 @@ self.addEventListener('fetch', event => {
     event.respondWith(
       fetch(request)
         .then(response => {
-          const copy = response.clone()
-          caches.open(CACHE_NAME).then(cache => cache.put('/index.html', copy))
+          if (response && response.status === 200) {
+            const copy = response.clone()
+            caches.open(CACHE_NAME).then(cache => cache.put('/index.html', copy))
+          }
           return response
         })
-        .catch(() => caches.match('/index.html').then(response => response || caches.match('/offline.html')))
+        .catch(err => {
+          return caches.match('/index.html')
+            .then(cachedResponse => cachedResponse || caches.match('/offline.html'))
+            .then(fallback => fallback || new Response(
+              '<!DOCTYPE html><html><head><meta charset="utf-8"><title>Offline</title><style>body{font-family:sans-serif;text-align:center;padding:50px;background:#f9f9f9;color:#333;}h1{color:#ff4d4f;}</style></head><body><h1>Connection Lost</h1><p>Please check your internet connection.</p></body></html>',
+              {
+                status: 503,
+                headers: { 'Content-Type': 'text/html' }
+              }
+            ))
+        })
     )
     return
   }
