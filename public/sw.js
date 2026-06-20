@@ -66,6 +66,11 @@ self.addEventListener('fetch', event => {
         caches.open(CACHE_NAME).then(cache => cache.put(request, copy))
         return response
       })
-      .catch(() => caches.match(request))
+      .catch(err => {
+        return caches.match(request).then(cachedResponse => {
+          if (cachedResponse) return cachedResponse
+          throw err
+        })
+      })
   )
 })
