@@ -242,7 +242,7 @@ export default function AccountPage() {
         <div style={{ fontSize: '1.5rem', marginBottom: '6px' }}>🫙</div>
         <div style={{ fontSize: '1rem', fontWeight: '800', color: '#C2410C' }}>SVT Oils</div>
         <div style={{ fontSize: '0.75rem', color: '#A8A29E', marginTop: '2px' }}>Version 1.0.0</div>
-        <div style={{ fontSize: '0.75rem', color: '#78716C', marginTop: '6px', fontWeight: '600' }}>Build and developed by Shakti Softwares.<br />(8904286980)</div>
+        <div style={{ fontSize: '0.75rem', color: '#78716C', marginTop: '6px', fontWeight: '600' }}>Build and developed by <a href="https://shakti-software-pseq.vercel.app/" target="_blank" rel="noopener noreferrer" style={{ color: 'inherit', textDecoration: 'underline' }}>Shakti Softwares</a>.<br />(8904286980)</div>
       </div>
 
       {/* Logout */}

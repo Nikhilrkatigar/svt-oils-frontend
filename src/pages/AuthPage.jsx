@@ -251,7 +251,7 @@ export default function AuthPage() {
           textAlign: 'center', marginTop: '10px', fontSize: '0.75rem',
           color: '#78716C', fontWeight: '600', lineHeight: '1.5'
         }}>
-          Build and developed by Shakti Softwares.<br />
+          Build and developed by <a href="https://shakti-software-pseq.vercel.app/" target="_blank" rel="noopener noreferrer" style={{ color: 'inherit', textDecoration: 'underline' }}>Shakti Softwares</a>.<br />
           (8904286980)
         </p>
       </div>
