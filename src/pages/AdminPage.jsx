@@ -68,6 +68,7 @@ const EMPTY_PRODUCT = {
   emoji: '',
   inStock: true,
   variants: [],
+  sortOrder: 999,
 }
 
 const EMPTY_VARIANT = {
@@ -154,6 +155,7 @@ export default function AdminPage() {
   const [showUserPassword, setShowUserPassword] = useState(false)
   const [uploadingProductImage, setUploadingProductImage] = useState(false)
   const [updatingOrderId, setUpdatingOrderId] = useState(null)
+  const [confirmDialog, setConfirmDialog] = useState(null)
 
   useEffect(() => {
     if (!user?.isAdmin) {
@@ -211,6 +213,7 @@ export default function AdminPage() {
         ...product,
         price: product.price ?? '',
         discountPrice: product.discountPrice ?? '',
+        sortOrder: product.sortOrder ?? 999,
         isNegotiable: product.price == null ? true : Boolean(product.isNegotiable),
         variants: (product.variants || []).map(variant => ({
           ...EMPTY_VARIANT,
@@ -258,6 +261,7 @@ export default function AdminPage() {
         ? null
         : Number(productForm.discountPrice),
       isNegotiable: priceIsBlank ? true : Boolean(productForm.isNegotiable),
+      sortOrder: productForm.sortOrder === '' || productForm.sortOrder == null ? 999 : Number(productForm.sortOrder),
       variants: normalizeFormVariants(productForm.variants),
     }
 
@@ -343,17 +347,29 @@ export default function AdminPage() {
     }))
   }
 
+  const requestConfirm = (title, message, onConfirm) => {
+    setConfirmDialog({
+      title,
+      message,
+      onConfirm: async () => {
+        setConfirmDialog(null)
+        await onConfirm()
+      },
+    })
+  }
+
   const handleDeleteProduct = async (id) => {
-    if (!window.confirm('Delete this product?')) return
-    const removedProduct = products.find(item => item._id === id)
-    setProducts(prev => prev.filter(item => item._id !== id))
-    try {
-      await productApi.delete(id)
-      addToast('Product deleted', 'success')
-    } catch (err) {
-      if (removedProduct) setProducts(prev => [removedProduct, ...prev])
-      addToast(err.response?.data?.message || 'Failed to delete product', 'error')
-    }
+    requestConfirm('Delete Product', 'Are you sure you want to delete this product?', async () => {
+      const removedProduct = products.find(item => item._id === id)
+      setProducts(prev => prev.filter(item => item._id !== id))
+      try {
+        await productApi.delete(id)
+        addToast('Product deleted', 'success')
+      } catch (err) {
+        if (removedProduct) setProducts(prev => [removedProduct, ...prev])
+        addToast(err.response?.data?.message || 'Failed to delete product', 'error')
+      }
+    })
   }
 
   const handleUpdateStatus = async (orderId, status) => {
@@ -370,6 +386,20 @@ export default function AdminPage() {
     } finally {
       setUpdatingOrderId(null)
     }
+  }
+
+  const handleDeleteOrder = async (id) => {
+    requestConfirm('Delete Order', 'Are you sure you want to delete this order?', async () => {
+      const removedOrder = orders.find(item => item._id === id)
+      setOrders(prev => prev.filter(item => item._id !== id))
+      try {
+        await orderApi.delete(id)
+        addToast('Order deleted', 'success')
+      } catch (err) {
+        if (removedOrder) setOrders(prev => [removedOrder, ...prev])
+        addToast(err.response?.data?.message || 'Failed to delete order', 'error')
+      }
+    })
   }
 
   const handleSaveUser = async () => {
@@ -689,6 +719,9 @@ export default function AdminPage() {
                           <option key={status} value={status}>{STATUS_LABELS[status]}</option>
                         ))}
                       </select>
+                      <button onClick={() => handleDeleteOrder(order._id)} aria-label="Delete order" style={iconButtonStyle('#FEE2E2', 'var(--red-badge)')}>
+                        <Trash2 size={16} />
+                      </button>
                     </div>
                   </div>
                 ))}
@@ -827,6 +860,9 @@ export default function AdminPage() {
               <input className="input-field" type="number" value={productForm.discountPrice} onChange={event => setProductForm(prev => ({ ...prev, discountPrice: event.target.value }))} />
             </Field>
           </div>
+          <Field label="Display Priority (Lower number shows first)">
+            <input className="input-field" type="number" value={productForm.sortOrder} onChange={event => setProductForm(prev => ({ ...prev, sortOrder: event.target.value }))} />
+          </Field>
           <label style={checkboxStyle}>
             <input type="checkbox" checked={productForm.isNegotiable || productForm.price === ''} disabled={productForm.price === ''} onChange={event => setProductForm(prev => ({ ...prev, isNegotiable: event.target.checked }))} />
             Negotiable price
@@ -969,6 +1005,19 @@ export default function AdminPage() {
             <button onClick={handleSaveUser} disabled={savingUser} style={primaryButtonStyle}><Save size={17} /> Save</button>
           </div>
         </Modal>
+      )}
+
+      {confirmDialog && (
+        <div className="modal-overlay" style={{ alignItems: 'center', padding: '24px' }} onClick={() => setConfirmDialog(null)}>
+          <div style={{ background: 'white', borderRadius: '16px', width: '100%', maxWidth: '360px', padding: '24px', boxShadow: '0 10px 25px rgba(0,0,0,0.1)' }} onClick={e => e.stopPropagation()}>
+            <h3 style={{ margin: '0 0 12px', fontSize: '1.2rem', fontWeight: 900, color: '#111827' }}>{confirmDialog.title}</h3>
+            <p style={{ margin: '0 0 24px', fontSize: '0.95rem', color: '#4B5563', lineHeight: '1.5' }}>{confirmDialog.message}</p>
+            <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
+              <button onClick={() => setConfirmDialog(null)} style={{ ...secondaryButtonStyle, border: '1px solid #D1D5DB', color: '#374151', padding: '8px 16px' }}>Cancel</button>
+              <button onClick={confirmDialog.onConfirm} style={{ ...primaryButtonStyle, background: '#DC2626', padding: '8px 16px', boxShadow: 'none' }}>Confirm</button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )

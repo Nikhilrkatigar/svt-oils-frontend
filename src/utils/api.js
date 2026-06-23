@@ -44,6 +44,7 @@ export const orderApi = {
   // Admin only
   all: (params) => API.get('/orders/admin/all', { params }),
   updateStatus: (id, status) => API.patch(`/orders/${id}/status`, { status }),
+  delete: (id) => API.delete(`/orders/${id}`),
 }
 
 // Location
