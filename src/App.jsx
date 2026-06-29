@@ -1,3 +1,4 @@
+import { lazy, Suspense } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider } from './context/AuthContext'
 import { CartProvider } from './context/CartContext'
@@ -8,7 +9,22 @@ import HomePage from './pages/HomePage'
 import CartPage from './pages/CartPage'
 import OrdersPage from './pages/OrdersPage'
 import AccountPage from './pages/AccountPage'
-import AdminPage from './pages/AdminPage'
+
+const AdminPage = lazy(() => import('./pages/AdminPage'))
+
+const LoadingFallback = () => (
+  <div style={{ display: 'grid', placeItems: 'center', minHeight: '100vh', background: '#FFFBF0', fontFamily: "'Baloo 2', sans-serif" }}>
+    <div style={{ textAlign: 'center' }}>
+      <div style={{ width: '48px', height: '48px', border: '5px solid #FED7AA', borderTopColor: '#F59E0B', borderRadius: '50%', animation: 'spin 1s linear infinite', margin: '0 auto 16px' }} />
+      <div style={{ color: '#D97706', fontWeight: 800, fontSize: '1.2rem' }}>Loading Admin Panel...</div>
+      <style>{`
+        @keyframes spin {
+          to { transform: rotate(360deg); }
+        }
+      `}</style>
+    </div>
+  </div>
+)
 
 export default function App() {
   return (
@@ -41,7 +57,11 @@ export default function App() {
 
               {/* Admin */}
               <Route path="/admin" element={
-                <AdminRoute><AdminPage /></AdminRoute>
+                <AdminRoute>
+                  <Suspense fallback={<LoadingFallback />}>
+                    <AdminPage />
+                  </Suspense>
+                </AdminRoute>
               } />
 
               {/* Fallback */}

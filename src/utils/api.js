@@ -20,19 +20,46 @@ export const authApi = {
   updateProfile: (data) => API.put('/auth/profile', data),
 }
 
+const cacheStore = {
+  products: null,
+  settings: null,
+}
+
 // Products
 export const productApi = {
-  getAll: (params) => API.get('/products', { params }),
+  getAll: async (params, bypassCache = false) => {
+    const isDefaultQuery = !params || (Object.keys(params).length === 1 && params.limit === 100) || Object.keys(params).length === 0
+    if (isDefaultQuery && cacheStore.products && !bypassCache) {
+      return { data: { products: cacheStore.products } }
+    }
+    const res = await API.get('/products', { params })
+    if (isDefaultQuery) {
+      cacheStore.products = res.data.products
+    }
+    return res
+  },
   getSuggested: () => API.get('/products/suggested'),
   getOne: (id) => API.get(`/products/${id}`),
   getCategories: () => API.get('/products/categories'),
   // Admin only
-  create: (data) => API.post('/products', data),
+  create: async (data) => {
+    cacheStore.products = null
+    return API.post('/products', data)
+  },
   uploadImage: (data) => API.post('/products/upload-image', data, {
     headers: { 'Content-Type': 'multipart/form-data' },
   }),
-  update: (id, data) => API.put(`/products/${id}`, data),
-  delete: (id) => API.delete(`/products/${id}`),
+  update: async (id, data) => {
+    cacheStore.products = null
+    return API.put(`/products/${id}`, data)
+  },
+  delete: async (id) => {
+    cacheStore.products = null
+    return API.delete(`/products/${id}`)
+  },
+  clearCache: () => {
+    cacheStore.products = null
+  },
 }
 
 // Orders
@@ -60,12 +87,26 @@ export const adminApi = {
   createUser: (data) => API.post('/admin/users', data),
   updateUser: (id, data) => API.put(`/admin/users/${id}`, data),
   toggleBlockUser: (id) => API.patch(`/admin/users/${id}/block`),
+  deleteUser: (id) => API.delete(`/admin/users/${id}`),
 }
 
 // Settings
 export const settingsApi = {
-  get: () => API.get('/settings'),
-  update: (data) => API.put('/settings', data),
+  get: async (bypassCache = false) => {
+    if (cacheStore.settings && !bypassCache) {
+      return { data: cacheStore.settings }
+    }
+    const res = await API.get('/settings')
+    cacheStore.settings = res.data
+    return res
+  },
+  update: async (data) => {
+    cacheStore.settings = null
+    return API.put('/settings', data)
+  },
+  clearCache: () => {
+    cacheStore.settings = null
+  },
 }
 
 export default API

@@ -391,6 +391,20 @@ export default function AdminPage() {
     })
   }
 
+  const handleDeleteUser = async (id) => {
+    requestConfirm('Delete User', 'Are you sure you want to delete this user? This action cannot be undone.', async () => {
+      const removedUser = users.find(item => item._id === id)
+      setUsers(prev => prev.filter(item => item._id !== id))
+      try {
+        await adminApi.deleteUser(id)
+        addToast('User deleted', 'success')
+      } catch (err) {
+        if (removedUser) setUsers(prev => [removedUser, ...prev])
+        addToast(err.response?.data?.message || 'Failed to delete user', 'error')
+      }
+    })
+  }
+
   const handleUpdateStatus = async (orderId, status) => {
     const previousOrder = orders.find(order => order._id === orderId)
     setUpdatingOrderId(orderId)
@@ -845,6 +859,9 @@ export default function AdminPage() {
                     </div>
                     <button onClick={() => openUserModal(item)} aria-label="Edit user" style={iconButtonStyle('var(--saffron-light)', 'var(--saffron-dark)')}>
                       <Edit2 size={16} />
+                    </button>
+                    <button onClick={() => handleDeleteUser(item._id)} aria-label="Delete user" style={iconButtonStyle('#FEE2E2', 'var(--red-badge)')}>
+                      <Trash2 size={16} />
                     </button>
                   </div>
                 ))}
