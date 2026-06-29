@@ -62,4 +62,10 @@ export const adminApi = {
   toggleBlockUser: (id) => API.patch(`/admin/users/${id}/block`),
 }
 
+// Settings
+export const settingsApi = {
+  get: () => API.get('/settings'),
+  update: (data) => API.put('/settings', data),
+}
+
 export default API

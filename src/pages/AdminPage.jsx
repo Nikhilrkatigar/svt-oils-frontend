@@ -16,10 +16,11 @@ import {
   Trash2,
   Users,
   X,
+  Settings as SettingsIcon,
 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { useToast } from '../context/ToastContext'
-import { adminApi, orderApi, productApi } from '../utils/api'
+import { adminApi, orderApi, productApi, settingsApi } from '../utils/api'
 
 const formatPrice = (value) => (
   value != null
@@ -127,6 +128,7 @@ const EMPTY_USER = {
   name: '',
   phone: '',
   secondaryPhone: '',
+  gstNumber: '',
   password: '',
   address: '',
   role: 'customer',
@@ -156,6 +158,8 @@ export default function AdminPage() {
   const [uploadingProductImage, setUploadingProductImage] = useState(false)
   const [updatingOrderId, setUpdatingOrderId] = useState(null)
   const [confirmDialog, setConfirmDialog] = useState(null)
+  const [settingsForm, setSettingsForm] = useState({ bulkOrderPhone: '', supportPhone: '' })
+  const [savingSettings, setSavingSettings] = useState(false)
 
   useEffect(() => {
     if (!user?.isAdmin) {
@@ -173,20 +177,35 @@ export default function AdminPage() {
   const fetchAll = async () => {
     setLoading(true)
     try {
-      const [statsRes, ordersRes, productsRes, usersRes] = await Promise.all([
+      const [statsRes, ordersRes, productsRes, usersRes, settingsRes] = await Promise.all([
         adminApi.dashboard(),
         orderApi.all({ limit: 100 }),
         productApi.getAll({ limit: 200 }),
         adminApi.users({ limit: 100 }),
+        settingsApi.get().catch(() => ({ data: { bulkOrderPhone: '', supportPhone: '' } })),
       ])
       setStats(statsRes.data)
       setOrders(ordersRes.data.orders || [])
       setProducts(productsRes.data.products || [])
       setUsers(usersRes.data.users || [])
+      setSettingsForm(settingsRes.data || { bulkOrderPhone: '', supportPhone: '' })
     } catch (err) {
       addToast(err.response?.data?.message || 'Failed to load admin data', 'error')
     } finally {
       setLoading(false)
+    }
+  }
+
+  const handleSaveSettings = async () => {
+    setSavingSettings(true)
+    try {
+      const res = await settingsApi.update(settingsForm)
+      setSettingsForm(res.data)
+      addToast('System settings updated successfully! ✅', 'success')
+    } catch (error) {
+      addToast(error.response?.data?.message || 'Failed to update settings', 'error')
+    } finally {
+      setSavingSettings(false)
     }
   }
 
@@ -428,6 +447,7 @@ export default function AdminPage() {
       name: userForm.name,
       phone: userForm.phone,
       secondaryPhone: userForm.secondaryPhone,
+      gstNumber: userForm.gstNumber,
       address: userForm.address,
       role: userForm.role,
       isBlocked: userForm.isBlocked,
@@ -485,6 +505,7 @@ export default function AdminPage() {
     { key: 'orders', label: 'Orders', icon: ClipboardList },
     { key: 'products', label: 'Products', icon: Package },
     { key: 'users', label: 'Users', icon: Users },
+    { key: 'settings', label: 'Settings', icon: SettingsIcon },
   ]
 
   return (
@@ -510,7 +531,7 @@ export default function AdminPage() {
           </button>
         </div>
 
-        <nav className="admin-tabs" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', background: 'white', borderRadius: '20px 20px 0 0', overflow: 'hidden', boxShadow: '0 -4px 10px rgba(0,0,0,0.05)' }}>
+        <nav className="admin-tabs" style={{ display: 'grid', gridTemplateColumns: 'repeat(5, minmax(0, 1fr))', background: 'white', borderRadius: '20px 20px 0 0', overflow: 'hidden', boxShadow: '0 -4px 10px rgba(0,0,0,0.05)' }}>
           {tabs.map(item => {
             const Icon = item.icon
             const active = tab === item.key
@@ -696,6 +717,11 @@ export default function AdminPage() {
                     <div style={{ marginTop: '8px', fontSize: '0.78rem', color: '#6B7280' }}>
                       Shop Name: {order.deliveryAddress || order.user?.address || 'Not provided'}
                     </div>
+                    {order.user?.gstNumber && (
+                      <div style={{ marginTop: '4px', fontSize: '0.78rem', color: '#6B7280', fontWeight: 600 }}>
+                        GST Number: <span style={{ color: '#0284C7' }}>{order.user.gstNumber}</span>
+                      </div>
+                    )}
                     {Number.isFinite(order.deliveryLocation?.lat) && Number.isFinite(order.deliveryLocation?.lng) && (
                       <a
                         href={`https://www.google.com/maps?q=${order.deliveryLocation.lat},${order.deliveryLocation.lng}`}
@@ -753,10 +779,15 @@ export default function AdminPage() {
                       )}
                     </div>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontWeight: 900, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{product.name}</div>
+                      <div style={{ fontWeight: 900, lineHeight: 1.2, marginBottom: '2px', wordBreak: 'break-word' }}>{product.name}</div>
                       <div style={{ fontSize: '0.78rem', color: 'var(--text-mid)' }}>{getProductMetaLabel(product)}</div>
-                      <div style={{ fontSize: '0.86rem', fontWeight: 800, marginTop: '3px', color: getProductPriceLabel(product) === 'Negotiable' ? 'var(--saffron-dark)' : 'var(--text-dark)' }}>
-                        {getProductPriceLabel(product)}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '3px' }}>
+                        <span style={{ fontSize: '0.86rem', fontWeight: 800, color: getProductPriceLabel(product) === 'Negotiable' ? 'var(--saffron-dark)' : 'var(--text-dark)' }}>
+                          {getProductPriceLabel(product)}
+                        </span>
+                        <span style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-mid)', background: '#F5F5F4', padding: '1px 6px', borderRadius: '4px', border: '1px solid var(--border)' }}>
+                          Priority: {product.sortOrder ?? 999}
+                        </span>
                       </div>
                     </div>
                     <button onClick={() => openProductModal(product)} aria-label="Edit product" style={iconButtonStyle('var(--saffron-light)', 'var(--saffron-dark)')}>
@@ -802,7 +833,12 @@ export default function AdminPage() {
                     </div>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontWeight: 900, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.name}</div>
-                      <div style={{ fontSize: '0.78rem', color: 'var(--text-mid)' }}>+91 {item.phone}{item.secondaryPhone ? ` | +91 ${item.secondaryPhone}` : ''} | {item.role || 'customer'}</div>
+                      <div style={{ fontSize: '0.78rem', color: 'var(--text-mid)' }}>
+                        +91 {item.phone}
+                        {item.secondaryPhone ? ` | +91 ${item.secondaryPhone}` : ''}
+                        {item.gstNumber ? ` | GST: ${item.gstNumber}` : ''}
+                        {` | ${item.role || 'customer'}`}
+                      </div>
                       <div style={{ fontSize: '0.76rem', color: 'var(--text-mid)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                         {item.address || 'No shop name'}
                       </div>
@@ -814,6 +850,55 @@ export default function AdminPage() {
                 ))}
               </div>
             )}
+          </section>
+        )}
+
+        {tab === 'settings' && (
+          <section>
+            <div style={{ ...panelStyle, maxWidth: '600px', margin: '0 auto', padding: '24px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '20px', borderBottom: '2px solid var(--border)', paddingBottom: '12px' }}>
+                <span style={{ fontSize: '1.4rem' }}>⚙️</span>
+                <h2 style={{ fontSize: '1.25rem', fontWeight: 800, margin: 0 }}>System Settings</h2>
+              </div>
+
+              <div style={{ display: 'grid', gap: '20px' }}>
+                <Field label="Bulk Orders Phone Number">
+                  <input
+                    className="input-field"
+                    type="tel"
+                    placeholder="Enter phone number for bulk orders"
+                    value={settingsForm.bulkOrderPhone}
+                    onChange={event => setSettingsForm(prev => ({ ...prev, bulkOrderPhone: event.target.value }))}
+                  />
+                  <div style={{ fontSize: '0.78rem', color: 'var(--text-light)', marginTop: '4px' }}>
+                    Replicates on the home banner: "Bulk Orders? Call: [number]"
+                  </div>
+                </Field>
+
+                <Field label="Support / Issues Phone Number">
+                  <input
+                    className="input-field"
+                    type="tel"
+                    placeholder="Enter phone number for customer issues"
+                    value={settingsForm.supportPhone}
+                    onChange={event => setSettingsForm(prev => ({ ...prev, supportPhone: event.target.value }))}
+                  />
+                  <div style={{ fontSize: '0.78rem', color: 'var(--text-light)', marginTop: '4px' }}>
+                    Replicates on the home banner: "Having Issues? Call Support: [number]"
+                  </div>
+                </Field>
+
+                <div style={{ marginTop: '10px' }}>
+                  <button
+                    onClick={handleSaveSettings}
+                    disabled={savingSettings}
+                    style={{ ...primaryButtonStyle, width: '100%', padding: '12px' }}
+                  >
+                    {savingSettings ? 'Saving...' : 'Save Settings'}
+                  </button>
+                </div>
+              </div>
+            </div>
           </section>
         )}
       </main>
@@ -883,9 +968,6 @@ export default function AdminPage() {
                   Add all sizes for this product here.
                 </div>
               </div>
-              <button type="button" onClick={handleAddVariant} style={secondaryButtonStyle}>
-                <Plus size={16} /> Weight
-              </button>
             </div>
             {(productForm.variants || []).length === 0 ? (
               <div style={{ fontSize: '0.8rem', color: '#6B7280', padding: '8px 0' }}>
@@ -954,6 +1036,11 @@ export default function AdminPage() {
                 ))}
               </div>
             )}
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '4px' }}>
+              <button type="button" onClick={handleAddVariant} style={secondaryButtonStyle}>
+                <Plus size={16} /> Weight
+              </button>
+            </div>
           </div>
           <Field label="Description">
             <textarea className="input-field" rows={3} value={productForm.description} onChange={event => setProductForm(prev => ({ ...prev, description: event.target.value }))} />
@@ -975,6 +1062,9 @@ export default function AdminPage() {
           </Field>
           <Field label="Secondary Phone (Optional)">
             <input className="input-field" value={userForm.secondaryPhone || ''} inputMode="numeric" maxLength={10} onChange={event => setUserForm(prev => ({ ...prev, secondaryPhone: event.target.value.replace(/\D/g, '').slice(0, 10) }))} />
+          </Field>
+          <Field label="GST Number (Optional)">
+            <input className="input-field" value={userForm.gstNumber || ''} placeholder="e.g. 22AAAAA0000A1Z5" maxLength={15} onChange={event => setUserForm(prev => ({ ...prev, gstNumber: event.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '') }))} />
           </Field>
           <Field label={userModalId === 'new' ? 'Password' : 'New Password'}>
             <PasswordInput

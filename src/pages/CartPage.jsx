@@ -121,7 +121,7 @@ export default function CartPage() {
         imageUrl: i.imageUrl,
         price: i.discountPrice ?? i.price ?? 0,
         qty: i.qty,
-        isNegotiable: i.isNegotiable || false,
+        isNegotiable: (i.isNegotiable && i.price == null) || false,
       }))
 
       const res = await orderApi.place({
@@ -198,7 +198,8 @@ export default function CartPage() {
           {/* Cart items */}
           <div style={{ marginTop: '12px' }}>
             {items.map(item => {
-              const itemPrice = item.isNegotiable ? null : (item.discountPrice ?? item.price)
+              const isNego = item.isNegotiable && item.price == null
+              const itemPrice = isNego ? null : (item.discountPrice ?? item.price)
               const lineTotal = itemPrice != null ? itemPrice * item.qty : null
               return (
                 <div key={item.cartKey || item._id} className="cart-item">
@@ -206,7 +207,7 @@ export default function CartPage() {
                   <div style={{ flex: 1 }}>
                     <div className="cart-item-name">{item.name}</div>
                     <div className="cart-item-sub">{item.brand} {item.weight && `• ${item.weight}`}</div>
-                    {item.isNegotiable ? (
+                    {isNego ? (
                       <div style={{ fontSize: '0.78rem', fontWeight: '700', color: '#7C3AED', marginTop: '4px' }}>
                         🤝 Negotiable price
                       </div>
@@ -221,7 +222,7 @@ export default function CartPage() {
                     >
                       <Trash2 size={15} />
                     </button>
-                    <div className="qty-control" style={{ width: '90px' }}>
+                    <div className="qty-control" style={{ width: '100px' }}>
                       <button className="qty-btn" onClick={() => updateQty(item.cartKey || item._id, item.qty - 1)}>−</button>
                       <input
                         className="qty-input"
@@ -244,12 +245,13 @@ export default function CartPage() {
           <div style={{ margin: '16px 12px', background: 'white', borderRadius: '16px', padding: '16px', boxShadow: 'var(--shadow-sm)' }}>
             <div style={{ fontWeight: '800', fontSize: '0.95rem', marginBottom: '12px' }}>💰 Price Summary</div>
             {items.map(item => {
-              const itemPrice = item.isNegotiable ? null : (item.discountPrice ?? item.price)
+              const isNego = item.isNegotiable && item.price == null
+              const itemPrice = isNego ? null : (item.discountPrice ?? item.price)
               return (
                 <div key={item.cartKey || item._id} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
                   <span style={{ fontSize: '0.85rem', color: '#57534E', flex: 1 }}>{item.name} {item.weight && `(${item.weight})`} x{item.qty}</span>
-                  <span style={{ fontSize: '0.85rem', fontWeight: '700', color: item.isNegotiable ? '#7C3AED' : '#1C1917', marginLeft: '8px' }}>
-                    {item.isNegotiable ? 'Nego' : (itemPrice != null ? formatPrice(itemPrice * item.qty) : '—')}
+                  <span style={{ fontSize: '0.85rem', fontWeight: '700', color: isNego ? '#7C3AED' : '#1C1917', marginLeft: '8px' }}>
+                    {isNego ? 'Nego' : (itemPrice != null ? formatPrice(itemPrice * item.qty) : '—')}
                   </span>
                 </div>
               )

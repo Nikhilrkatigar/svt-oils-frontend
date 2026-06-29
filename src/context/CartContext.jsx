@@ -44,11 +44,11 @@ export function CartProvider({ children }) {
   const totalItems = items.reduce((sum, i) => sum + i.qty, 0)
 
   const totalPrice = items.reduce((sum, i) => {
-    const price = i.isNegotiable ? 0 : (i.discountPrice ?? i.price)
+    const price = (i.isNegotiable && i.price == null) ? 0 : (i.discountPrice ?? i.price)
     return sum + price * i.qty
   }, 0)
 
-  const hasNegotiable = items.some(i => i.isNegotiable)
+  const hasNegotiable = items.some(i => i.isNegotiable && i.price == null)
 
   const getQty = (productId) => {
     const item = items.find(i => (i.cartKey || i._id) === productId)

@@ -2,16 +2,12 @@ import { useState, useEffect, useMemo } from 'react'
 import { Search } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { useToast } from '../context/ToastContext'
-import { productApi } from '../utils/api'
+import { productApi, settingsApi } from '../utils/api'
 import ProductCard from '../components/product/ProductCard'
 import ProductDetail from '../components/product/ProductDetail'
 import BottomNav from '../components/layout/BottomNav'
 
-const BANNERS = [
-  { title: 'Fresh Stock Arrived! 🎉', sub: 'SVT Gold & Sunflower Oils', cls: 'orange' },
-  { title: 'Bulk Orders?', sub: 'Call for special pricing 📞', cls: 'yellow' },
-  { title: 'Pure & Natural 🌿', sub: 'Quality you can taste', cls: 'green' },
-]
+// Banners are dynamically constructed inside the component based on settings
 
 // Demo products (used as fallback when API is not connected)
 const DEMO_PRODUCTS = [
@@ -116,10 +112,21 @@ export default function HomePage() {
   const [category, setCategory] = useState('all')
   const [search, setSearch] = useState('')
   const [selectedProduct, setSelectedProduct] = useState(null)
+  const [settings, setSettings] = useState({ bulkOrderPhone: '', supportPhone: '' })
 
   useEffect(() => {
     fetchProducts()
+    fetchSettings()
   }, [])
+
+  const fetchSettings = async () => {
+    try {
+      const res = await settingsApi.get()
+      setSettings(res.data || { bulkOrderPhone: '', supportPhone: '' })
+    } catch (err) {
+      console.error('Failed to fetch settings', err)
+    }
+  }
 
   useEffect(() => {
     if (user) fetchSuggested()
@@ -212,14 +219,51 @@ export default function HomePage() {
       </div>
 
       {/* Banners */}
-      <div className="banner-scroll">
-        {BANNERS.map((b, i) => (
-          <div key={i} className={`banner-card ${b.cls}`}>
-            <div className="banner-title">{b.title}</div>
-            <div className="banner-sub">{b.sub}</div>
+      {(() => {
+        const phoneToShow = settings.bulkOrderPhone || settings.supportPhone
+        const bannersList = [
+          { title: 'Fresh Stock Arrived! 🎉', sub: 'SVT Gold & Sunflower Oils', cls: 'orange' },
+          { 
+            title: 'Bulk Orders? / Issues', 
+            sub: phoneToShow ? `Call for special pricing 📞 +91 ${phoneToShow}` : 'Call for special pricing 📞', 
+            cls: 'yellow',
+            phone: phoneToShow
+          },
+          { title: 'Pure & Natural 🌿', sub: 'Quality you can taste', cls: 'green' },
+        ]
+
+        return (
+          <div className="banner-scroll">
+            {bannersList.map((b, i) => {
+              const content = (
+                <>
+                  <div className="banner-title">{b.title}</div>
+                  <div className="banner-sub">{b.sub}</div>
+                </>
+              )
+
+              if (b.phone) {
+                return (
+                  <a 
+                    key={i} 
+                    href={`tel:${b.phone}`} 
+                    className={`banner-card ${b.cls || ''}`} 
+                    style={{ ...b.style, textDecoration: 'none', cursor: 'pointer' }}
+                  >
+                    {content}
+                  </a>
+                )
+              }
+
+              return (
+                <div key={i} className={`banner-card ${b.cls || ''}`} style={b.style}>
+                  {content}
+                </div>
+              )
+            })}
           </div>
-        ))}
-      </div>
+        )
+      })()}
 
       {/* Suggested Products */}
       {!search && suggestedProducts.length > 0 && (

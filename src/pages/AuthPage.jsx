@@ -13,6 +13,7 @@ export default function AuthPage() {
   const [showPassword, setShowPassword] = useState(false)
   const [name, setName] = useState('')
   const [address, setAddress] = useState('')
+  const [gstNumber, setGstNumber] = useState('')
   const [loading, setLoading] = useState(false)
 
   const { login } = useAuth()
@@ -62,7 +63,7 @@ export default function AuthPage() {
 
     setLoading(true)
     try {
-      const res = await authApi.register({ name, phone, secondaryPhone, address, password })
+      const res = await authApi.register({ name, phone, secondaryPhone, gstNumber, address, password })
       login(res.data.user, res.data.token)
       addToast(`Welcome to SVT Oils, ${name}!`, 'success')
       navigate(res.data.user.isAdmin ? '/admin' : '/')
@@ -176,6 +177,22 @@ export default function AuthPage() {
                   style={{ fontSize: '1.1rem', flex: 1 }}
                 />
               </div>
+            </div>
+          )}
+
+          {isRegister && (
+            <div>
+              <label style={{ fontSize: '0.85rem', fontWeight: '700', color: '#57534E', marginBottom: '6px', display: 'block' }}>
+                GST Number (Optional)
+              </label>
+              <input
+                className="input-field"
+                placeholder="e.g. 22AAAAA0000A1Z5"
+                value={gstNumber}
+                onChange={e => setGstNumber(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''))}
+                maxLength={15}
+                style={{ fontSize: '1.05rem' }}
+              />
             </div>
           )}
 

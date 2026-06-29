@@ -28,6 +28,7 @@ export default function AccountPage() {
   const [editing, setEditing] = useState(false)
   const [name, setName] = useState(user?.name || '')
   const [secondaryPhone, setSecondaryPhone] = useState(user?.secondaryPhone || '')
+  const [gstNumber, setGstNumber] = useState(user?.gstNumber || '')
   const [address, setAddress] = useState(user?.address || '')
   const [addressLocation, setAddressLocation] = useState(user?.addressLocation || null)
   const [saving, setSaving] = useState(false)
@@ -37,12 +38,12 @@ export default function AccountPage() {
     if (!name.trim()) { addToast('Name cannot be empty', 'error'); return }
     setSaving(true)
     try {
-      const res = await authApi.updateProfile({ name, secondaryPhone, address, addressLocation })
+      const res = await authApi.updateProfile({ name, secondaryPhone, gstNumber, address, addressLocation })
       updateUser(res.data.user)
       addToast('Profile updated! ✅', 'success')
       setEditing(false)
     } catch {
-      updateUser({ ...user, name, secondaryPhone, address, addressLocation })
+      updateUser({ ...user, name, secondaryPhone, gstNumber, address, addressLocation })
       addToast('Profile updated locally! ✅', 'success')
       setEditing(false)
     } finally {
@@ -109,6 +110,10 @@ export default function AccountPage() {
       color: '#16A34A', bg: '#DCFCE7', action: null
     },
     {
+      icon: <span style={{ fontSize: '1.2rem' }}>📄</span>, label: 'GST Number (Optional)', sub: user?.gstNumber || 'Not provided',
+      color: '#0284C7', bg: '#E0F2FE', action: () => setEditing(true)
+    },
+    {
       icon: <Shield size={20} />, label: 'Privacy & Security', sub: 'Your data is safe 🔒',
       color: '#2563EB', bg: '#DBEAFE', action: null
     },
@@ -158,6 +163,10 @@ export default function AccountPage() {
                 <div>
                   <label style={{ fontSize: '0.85rem', fontWeight: '700', color: '#57534E', marginBottom: '6px', display: 'block' }}>Secondary Mobile Number (Optional)</label>
                   <input className="input-field" value={secondaryPhone} onChange={e => setSecondaryPhone(e.target.value.replace(/\D/g, '').slice(0, 10))} placeholder="10-digit secondary number" type="tel" inputMode="numeric" />
+                </div>
+                <div>
+                  <label style={{ fontSize: '0.85rem', fontWeight: '700', color: '#57534E', marginBottom: '6px', display: 'block' }}>GST Number (Optional)</label>
+                  <input className="input-field" value={gstNumber} onChange={e => setGstNumber(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''))} placeholder="e.g. 22AAAAA0000A1Z5" maxLength={15} />
                 </div>
                 <div>
                   <label style={{ fontSize: '0.85rem', fontWeight: '700', color: '#57534E', marginBottom: '6px', display: 'block' }}>Shop Name / Address</label>
