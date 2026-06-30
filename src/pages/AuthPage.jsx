@@ -14,6 +14,7 @@ export default function AuthPage() {
   const [name, setName] = useState('')
   const [address, setAddress] = useState('')
   const [gstNumber, setGstNumber] = useState('')
+  const [pinCode, setPinCode] = useState('')
   const [loading, setLoading] = useState(false)
 
   const { login } = useAuth()
@@ -59,11 +60,13 @@ export default function AuthPage() {
   const handleRegister = async () => {
     if (!name.trim()) { addToast('Please enter your name', 'error'); return }
     if (!validateCommonFields()) return
+    if (!pinCode) { addToast('Please enter your pin code', 'error'); return }
+    if (pinCode.length !== 6) { addToast('Pin Code must be 6 digits', 'error'); return }
     if (!address.trim()) { addToast('Please enter your shop name', 'error'); return }
 
     setLoading(true)
     try {
-      const res = await authApi.register({ name, phone, secondaryPhone, gstNumber, address, password })
+      const res = await authApi.register({ name, phone, secondaryPhone, gstNumber, pinCode, address, password })
       login(res.data.user, res.data.token)
       addToast(`Welcome to SVT Oils, ${name}!`, 'success')
       navigate(res.data.user.isAdmin ? '/admin' : '/')
@@ -191,6 +194,23 @@ export default function AuthPage() {
                 value={gstNumber}
                 onChange={e => setGstNumber(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''))}
                 maxLength={15}
+                style={{ fontSize: '1.05rem' }}
+              />
+            </div>
+          )}
+
+          {isRegister && (
+            <div>
+              <label style={{ fontSize: '0.85rem', fontWeight: '700', color: '#57534E', marginBottom: '6px', display: 'block' }}>
+                Pin Code
+              </label>
+              <input
+                className="input-field"
+                placeholder="e.g. 570001"
+                value={pinCode}
+                onChange={e => setPinCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                type="tel"
+                inputMode="numeric"
                 style={{ fontSize: '1.05rem' }}
               />
             </div>

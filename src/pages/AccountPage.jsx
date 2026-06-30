@@ -29,6 +29,7 @@ export default function AccountPage() {
   const [name, setName] = useState(user?.name || '')
   const [secondaryPhone, setSecondaryPhone] = useState(user?.secondaryPhone || '')
   const [gstNumber, setGstNumber] = useState(user?.gstNumber || '')
+  const [pinCode, setPinCode] = useState(user?.pinCode || '')
   const [address, setAddress] = useState(user?.address || '')
   const [addressLocation, setAddressLocation] = useState(user?.addressLocation || null)
   const [saving, setSaving] = useState(false)
@@ -36,14 +37,16 @@ export default function AccountPage() {
 
   const handleSave = async () => {
     if (!name.trim()) { addToast('Name cannot be empty', 'error'); return }
+    if (!pinCode) { addToast('Pin Code cannot be empty', 'error'); return }
+    if (pinCode.length !== 6) { addToast('Pin Code must be 6 digits', 'error'); return }
     setSaving(true)
     try {
-      const res = await authApi.updateProfile({ name, secondaryPhone, gstNumber, address, addressLocation })
+      const res = await authApi.updateProfile({ name, secondaryPhone, gstNumber, pinCode, address, addressLocation })
       updateUser(res.data.user)
       addToast('Profile updated! ✅', 'success')
       setEditing(false)
     } catch {
-      updateUser({ ...user, name, secondaryPhone, gstNumber, address, addressLocation })
+      updateUser({ ...user, name, secondaryPhone, gstNumber, pinCode, address, addressLocation })
       addToast('Profile updated locally! ✅', 'success')
       setEditing(false)
     } finally {
@@ -114,6 +117,10 @@ export default function AccountPage() {
       color: '#0284C7', bg: '#E0F2FE', action: () => setEditing(true)
     },
     {
+      icon: <span style={{ fontSize: '1.2rem' }}>📍</span>, label: 'Pin Code', sub: user?.pinCode || 'Not provided',
+      color: '#F59E0B', bg: '#FEF3C7', action: () => setEditing(true)
+    },
+    {
       icon: <Shield size={20} />, label: 'Privacy & Security', sub: 'Your data is safe 🔒',
       color: '#2563EB', bg: '#DBEAFE', action: null
     },
@@ -167,6 +174,10 @@ export default function AccountPage() {
                 <div>
                   <label style={{ fontSize: '0.85rem', fontWeight: '700', color: '#57534E', marginBottom: '6px', display: 'block' }}>GST Number (Optional)</label>
                   <input className="input-field" value={gstNumber} onChange={e => setGstNumber(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''))} placeholder="e.g. 22AAAAA0000A1Z5" maxLength={15} />
+                </div>
+                <div>
+                  <label style={{ fontSize: '0.85rem', fontWeight: '700', color: '#57534E', marginBottom: '6px', display: 'block' }}>Pin Code</label>
+                  <input className="input-field" value={pinCode} onChange={e => setPinCode(e.target.value.replace(/\D/g, '').slice(0, 6))} placeholder="e.g. 570001" type="tel" inputMode="numeric" />
                 </div>
                 <div>
                   <label style={{ fontSize: '0.85rem', fontWeight: '700', color: '#57534E', marginBottom: '6px', display: 'block' }}>Shop Name / Address</label>

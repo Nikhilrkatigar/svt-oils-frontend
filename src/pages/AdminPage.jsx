@@ -129,6 +129,7 @@ const EMPTY_USER = {
   phone: '',
   secondaryPhone: '',
   gstNumber: '',
+  pinCode: '',
   password: '',
   address: '',
   role: 'customer',
@@ -456,12 +457,21 @@ export default function AdminPage() {
       addToast('Password must be at least 6 characters', 'error')
       return
     }
+    if (!userForm.pinCode) {
+      addToast('Pin Code is required', 'error')
+      return
+    }
+    if (userForm.pinCode.length !== 6) {
+      addToast('Pin Code must be 6 digits', 'error')
+      return
+    }
 
     const payload = {
       name: userForm.name,
       phone: userForm.phone,
       secondaryPhone: userForm.secondaryPhone,
       gstNumber: userForm.gstNumber,
+      pinCode: userForm.pinCode,
       address: userForm.address,
       role: userForm.role,
       isBlocked: userForm.isBlocked,
@@ -736,6 +746,11 @@ export default function AdminPage() {
                         GST Number: <span style={{ color: '#0284C7' }}>{order.user.gstNumber}</span>
                       </div>
                     )}
+                    {order.user?.pinCode && (
+                      <div style={{ marginTop: '4px', fontSize: '0.78rem', color: '#6B7280', fontWeight: 600 }}>
+                        Pin Code: <span style={{ color: '#F59E0B' }}>{order.user.pinCode}</span>
+                      </div>
+                    )}
                     {Number.isFinite(order.deliveryLocation?.lat) && Number.isFinite(order.deliveryLocation?.lng) && (
                       <a
                         href={`https://www.google.com/maps?q=${order.deliveryLocation.lat},${order.deliveryLocation.lng}`}
@@ -851,6 +866,7 @@ export default function AdminPage() {
                         +91 {item.phone}
                         {item.secondaryPhone ? ` | +91 ${item.secondaryPhone}` : ''}
                         {item.gstNumber ? ` | GST: ${item.gstNumber}` : ''}
+                        {item.pinCode ? ` | PIN: ${item.pinCode}` : ''}
                         {` | ${item.role || 'customer'}`}
                       </div>
                       <div style={{ fontSize: '0.76rem', color: 'var(--text-mid)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
@@ -1082,6 +1098,9 @@ export default function AdminPage() {
           </Field>
           <Field label="GST Number (Optional)">
             <input className="input-field" value={userForm.gstNumber || ''} placeholder="e.g. 22AAAAA0000A1Z5" maxLength={15} onChange={event => setUserForm(prev => ({ ...prev, gstNumber: event.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '') }))} />
+          </Field>
+          <Field label="Pin Code">
+            <input className="input-field" value={userForm.pinCode || ''} placeholder="e.g. 570001" maxLength={6} inputMode="numeric" onChange={event => setUserForm(prev => ({ ...prev, pinCode: event.target.value.replace(/\D/g, '').slice(0, 6) }))} />
           </Field>
           <Field label={userModalId === 'new' ? 'Password' : 'New Password'}>
             <PasswordInput
