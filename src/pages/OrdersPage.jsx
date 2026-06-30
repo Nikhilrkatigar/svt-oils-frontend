@@ -61,7 +61,7 @@ const DEMO_ORDERS = [
 
 function OrderCard({ order, onClick }) {
   const cfg = STATUS_CONFIG[order.status] || STATUS_CONFIG.pending
-  const itemSummary = order.items?.map(i => `${i.name} x${i.qty}`).join(', ') || ''
+  const itemSummary = order.items?.map(i => `${i.name}${i.weight ? ` (${i.weight})` : ''} x${i.qty}`).join(', ') || ''
   const dateStr = order.createdAt
     ? format(parseISO(order.createdAt), 'dd MMM yyyy')
     : ''
@@ -305,7 +305,7 @@ function OrderDetailPage({ orderId }) {
       </div>
 
       {/* Cancel button */}
-      {['pending', 'confirmed'].includes(order.status) && (
+      {order.status === 'pending' && (
         <div style={{ padding: '0 12px 24px' }}>
           <button
             onClick={handleCancel}

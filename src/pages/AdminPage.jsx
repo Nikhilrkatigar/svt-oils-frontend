@@ -161,6 +161,9 @@ export default function AdminPage() {
   const [confirmDialog, setConfirmDialog] = useState(null)
   const [settingsForm, setSettingsForm] = useState({ bulkOrderPhone: '', supportPhone: '' })
   const [savingSettings, setSavingSettings] = useState(false)
+  const [orderSearch, setOrderSearch] = useState('')
+  const [startDate, setStartDate] = useState('')
+  const [endDate, setEndDate] = useState('')
 
   useEffect(() => {
     if (!user?.isAdmin) {
@@ -210,9 +213,40 @@ export default function AdminPage() {
     }
   }
 
-  const filteredOrders = useMemo(() => (
-    statusFilter === 'all' ? orders : orders.filter(order => order.status === statusFilter)
-  ), [orders, statusFilter])
+  const filteredOrders = useMemo(() => {
+    let result = orders
+
+    if (statusFilter !== 'all') {
+      result = result.filter(order => order.status === statusFilter)
+    }
+
+    const search = orderSearch.trim().toLowerCase()
+    if (search) {
+      result = result.filter(order => {
+        const orderId = (order.orderId || order._id || '').toLowerCase()
+        const customerName = (order.user?.name || '').toLowerCase()
+        const customerPhone = (order.phone || order.user?.phone || '')
+        const shopAddress = (order.deliveryAddress || '').toLowerCase()
+        return orderId.includes(search) || 
+               customerName.includes(search) || 
+               customerPhone.includes(search) || 
+               shopAddress.includes(search)
+      })
+    }
+
+    if (startDate) {
+      const start = new Date(startDate)
+      start.setHours(0, 0, 0, 0)
+      result = result.filter(order => new Date(order.createdAt) >= start)
+    }
+    if (endDate) {
+      const end = new Date(endDate)
+      end.setHours(23, 59, 59, 999)
+      result = result.filter(order => new Date(order.createdAt) <= end)
+    }
+
+    return result
+  }, [orders, statusFilter, orderSearch, startDate, endDate])
 
   const filteredUsers = useMemo(() => {
     const search = userSearch.trim().toLowerCase()
@@ -434,6 +468,209 @@ export default function AdminPage() {
         addToast(err.response?.data?.message || 'Failed to delete order', 'error')
       }
     })
+  }
+
+  const handleExportExcel = () => {
+    try {
+      const allOrders = filteredOrders
+      
+      if (allOrders.length === 0) {
+        addToast('No orders found to export', 'info')
+        return
+      }
+
+      const headers = [
+        'Order ID', 'Date', 'Status', 'Customer Name', 'Customer Phone',
+        'Secondary Phone', 'Shop Name / Address', 'GST Number', 'Pin Code',
+        'Item Name', 'Item Brand', 'Item Weight', 'Quantity', 'Unit Price',
+        'Item Subtotal', 'Is Negotiable Item', 'Order Total', 'Negotiable Order', 'Note'
+      ]
+
+      const escapeCsv = (val) => {
+        if (val == null) return ''
+        const str = String(val)
+        if (str.includes(',') || str.includes('"') || str.includes('\n') || str.includes('\r')) {
+          return '"' + str.replace(/"/g, '""') + '"'
+        }
+        return str
+      }
+
+      const rows = []
+      rows.push(headers.join(','))
+
+      allOrders.forEach(order => {
+        const orderId = order.orderId || order._id
+        const orderDate = new Date(order.createdAt).toLocaleString('en-IN')
+        const orderStatus = order.status
+        const customerName = order.user?.name || 'Unknown'
+        const customerPhone = order.phone || order.user?.phone || ''
+        const secondaryPhone = order.user?.secondaryPhone || ''
+        const shopAddress = order.deliveryAddress || ''
+        const gstNumber = order.user?.gstNumber || ''
+        const pinCode = order.user?.pinCode || ''
+        const orderTotal = order.total || 0
+        const isNegotiableOrder = order.hasNegotiable ? 'Yes' : 'No'
+        const orderNote = order.note || ''
+
+        if (!order.items || order.items.length === 0) {
+          const rowData = [
+            orderId, orderDate, orderStatus, customerName, customerPhone,
+            secondaryPhone, shopAddress, gstNumber, pinCode,
+            '', '', '', '', '', '', '',
+            orderTotal, isNegotiableOrder, orderNote
+          ]
+          rows.push(rowData.map(escapeCsv).join(','))
+        } else {
+          order.items.forEach(item => {
+            const itemName = item.name || ''
+            const itemBrand = item.brand || ''
+            const itemWeight = item.weight || ''
+            const qty = item.qty || 0
+            const unitPrice = item.price || 0
+            const itemSubtotal = unitPrice * qty
+            const isNegotiableItem = item.isNegotiable ? 'Yes' : 'No'
+
+            const rowData = [
+              orderId, orderDate, orderStatus, customerName, customerPhone,
+              secondaryPhone, shopAddress, gstNumber, pinCode,
+              itemName, itemBrand, itemWeight, qty, unitPrice, itemSubtotal, isNegotiableItem,
+              orderTotal, isNegotiableOrder, orderNote
+            ]
+            rows.push(rowData.map(escapeCsv).join(','))
+          })
+        }
+      })
+
+      const csvContent = '\uFEFF' + rows.join('\r\n')
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.setAttribute('href', url)
+      link.setAttribute('download', `SVT_Oils_Orders_${new Date().toISOString().slice(0, 10)}.csv`)
+      link.style.visibility = 'hidden'
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      addToast('Orders exported successfully to Excel/CSV! 📊', 'success')
+    } catch (err) {
+      addToast('Failed to export to Excel', 'error')
+    }
+  }
+
+  const handleExportPDF = () => {
+    try {
+      const allOrders = filteredOrders
+      
+      if (allOrders.length === 0) {
+        addToast('No orders found to export', 'info')
+        return
+      }
+
+      const printWindow = window.open('', '_blank')
+      if (!printWindow) {
+        addToast('Popup blocker prevented opening print window', 'error')
+        return
+      }
+
+      const html = `
+        <html>
+          <head>
+            <title>SVT Oils - Orders Report</title>
+            <style>
+              body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; color: #333; padding: 20px; font-size: 12px; }
+              h1 { text-align: center; color: #7C2D12; margin-bottom: 5px; font-size: 24px; }
+              .meta { text-align: center; font-size: 11px; margin-bottom: 20px; color: #666; font-weight: bold; }
+              table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+              th, td { border: 1px solid #CCCCCC; padding: 6px 8px; text-align: left; vertical-align: top; }
+              th { background-color: #F3F4F6; font-weight: 800; color: #374151; }
+              tr:nth-child(even) { background-color: #F9FAFB; }
+              .nego-badge { color: #7C3AED; font-weight: bold; }
+              .price-text { color: #15803D; font-weight: bold; }
+              .qty { color: #6B7280; font-size: 11px; }
+              .header-info { line-height: 1.4; }
+              .item-list { list-style: none; padding: 0; margin: 0; }
+              .item-list li { margin-bottom: 4px; padding-bottom: 4px; border-bottom: 1px dashed #E5E7EB; }
+              .item-list li:last-child { border-bottom: none; }
+              @media print {
+                body { padding: 0; }
+              }
+            </style>
+          </head>
+          <body>
+            <h1>SVT Oils - Orders History Report</h1>
+            <div class="meta">Exported on: ${new Date().toLocaleString('en-IN')} | Total Record Count: ${allOrders.length}</div>
+            <table>
+              <thead>
+                <tr>
+                  <th style="width: 80px;">Order ID</th>
+                  <th style="width: 100px;">Date & Status</th>
+                  <th style="width: 180px;">Customer & Delivery Details</th>
+                  <th>Items Details</th>
+                  <th style="width: 90px; text-align: right;">Total Amount</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${allOrders.map(order => {
+                  const dateStr = new Date(order.createdAt).toLocaleString('en-IN', {
+                    day: '2-digit', month: 'short', year: 'numeric',
+                    hour: '2-digit', minute: '2-digit'
+                  })
+                  return `
+                    <tr>
+                      <td><strong>#${order.orderId || order._id.slice(-6).toUpperCase()}</strong></td>
+                      <td class="header-info">
+                        ${dateStr}<br/>
+                        <span style="font-weight:bold; color: ${
+                          order.status === 'delivered' ? '#16A34A' :
+                          order.status === 'cancelled' ? '#EF4444' :
+                          order.status === 'shipped' ? '#7C3AED' : '#F59E0B'
+                        }; text-transform: uppercase; font-size: 10px;">
+                          ● ${order.status}
+                        </span>
+                      </td>
+                      <td class="header-info">
+                        <strong>${order.user?.name || 'Unknown'}</strong><br/>
+                        Phone: +91 ${order.phone || ''} ${order.user?.secondaryPhone ? ` / ${order.user.secondaryPhone}` : ''}<br/>
+                        Shop Address: ${order.deliveryAddress || ''}<br/>
+                        ${order.user?.gstNumber ? `GST: <strong>${order.user.gstNumber}</strong><br/>` : ''}
+                        ${order.user?.pinCode ? `PIN: <strong>${order.user.pinCode}</strong>` : ''}
+                      </td>
+                      <td>
+                        <ul class="item-list">
+                          ${order.items?.map(item => `
+                            <li>
+                              ${item.emoji || '🫙'} <strong>${item.name}</strong> ${item.weight ? `(${item.weight})` : ''}<br/>
+                              <span class="qty">Qty: ${item.qty} × ${item.isNegotiable ? 'Negotiable' : `₹${item.price}`}</span>
+                            </li>
+                          `).join('') || 'No items'}
+                        </ul>
+                        ${order.note ? `<div style="margin-top:5px; font-style:italic; color:#E11D48;">Note: ${order.note}</div>` : ''}
+                      </td>
+                      <td style="text-align: right;" class="header-info">
+                        ${order.hasNegotiable && !order.total 
+                          ? '<span class="nego-badge">Negotiable 🤝</span>' 
+                          : `<span class="price-text">₹${new Intl.NumberFormat('en-IN').format(order.total || 0)}</span>`
+                        }
+                      </td>
+                    </tr>
+                  `
+                }).join('')}
+              </tbody>
+            </table>
+            <script>
+              window.onload = function() {
+                window.print();
+              }
+            </script>
+          </body>
+        </html>
+      `
+      printWindow.document.write(html)
+      printWindow.document.close()
+      addToast('Print dialog opened! Choose "Save as PDF" to export. 📄', 'success')
+    } catch (err) {
+      addToast('Failed to export to PDF', 'error')
+    }
   }
 
   const handleSaveUser = async () => {
@@ -682,8 +919,26 @@ export default function AdminPage() {
                             <StatusBadge status={order.status} />
                           </div>
                           
-                          <div style={{ fontSize: '0.8rem', color: '#6B7280', background: '#F3F4F6', padding: '8px', borderRadius: '6px' }}>
-                            {order.items?.map(item => `${item.name} x${item.qty}`).join(', ') || 'No items'}
+                          <div style={{ fontSize: '0.8rem', color: '#6B7280', background: '#F3F4F6', padding: '8px 12px', borderRadius: '6px' }}>
+                            {(!order.items || order.items.length === 0) ? (
+                              'No items'
+                            ) : (
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                {order.items.map((item, idx) => (
+                                  <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.78rem' }}>
+                                    <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                      <span>{item.emoji || '🫙'}</span>
+                                      <strong style={{ color: '#374151' }}>{item.name}</strong>
+                                      {item.weight && <span style={{ color: '#6B7280' }}>({item.weight})</span>}
+                                      <span style={{ color: '#9CA3AF', fontWeight: 'bold' }}>x{item.qty}</span>
+                                    </span>
+                                    <span style={{ color: item.isNegotiable ? '#7C3AED' : '#15803D', fontWeight: 800 }}>
+                                      {item.isNegotiable ? 'Negotiable' : formatPrice(item.price * item.qty)}
+                                    </span>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
                           </div>
 
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '4px' }}>
@@ -710,21 +965,130 @@ export default function AdminPage() {
 
         {tab === 'orders' && (
           <section>
-            <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '8px' }}>
-              {['all', ...STATUS_OPTIONS].map(status => (
-                <button
-                  key={status}
-                  onClick={() => setStatusFilter(status)}
+            <div style={{
+              background: '#FFFFFF',
+              border: '1px solid var(--border)',
+              borderRadius: '12px',
+              padding: '12px 16px',
+              marginBottom: '14px',
+              display: 'grid',
+              gap: '12px',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+              boxShadow: 'var(--shadow-sm)'
+            }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <span style={{ fontSize: '0.78rem', fontWeight: 800, color: 'var(--text-mid)' }}>🔍 Search Orders</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', border: '2px solid var(--border)', borderRadius: '8px', padding: '6px 10px', background: '#FAFAFA' }}>
+                  <Search size={15} color="#9CA3AF" />
+                  <input
+                    value={orderSearch}
+                    onChange={e => setOrderSearch(e.target.value)}
+                    placeholder="Search ID, customer, phone, shop..."
+                    style={{ border: 'none', outline: 'none', background: 'transparent', width: '100%', fontSize: '0.85rem', fontFamily: 'var(--font-main)' }}
+                  />
+                  {orderSearch && (
+                    <button onClick={() => setOrderSearch('')} style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: '#9CA3AF', fontSize: '1rem', lineHeight: 1 }}>×</button>
+                  )}
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <span style={{ fontSize: '0.78rem', fontWeight: 800, color: 'var(--text-mid)' }}>📅 Start Date</span>
+                <input
+                  type="date"
+                  value={startDate}
+                  onChange={e => setStartDate(e.target.value)}
                   style={{
-                    ...chipStyle,
-                    background: statusFilter === status ? 'var(--saffron)' : '#FFFFFF',
-                    color: statusFilter === status ? '#FFFFFF' : 'var(--text-mid)',
-                    borderColor: statusFilter === status ? 'var(--saffron)' : 'var(--border)',
+                    border: '2px solid var(--border)',
+                    borderRadius: '8px',
+                    padding: '6px 10px',
+                    fontSize: '0.85rem',
+                    fontFamily: 'var(--font-main)',
+                    background: '#FAFAFA',
+                    color: 'var(--text-dark)',
+                    outline: 'none'
                   }}
+                />
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <span style={{ fontSize: '0.78rem', fontWeight: 800, color: 'var(--text-mid)' }}>📅 End Date</span>
+                <input
+                  type="date"
+                  value={endDate}
+                  onChange={e => setEndDate(e.target.value)}
+                  style={{
+                    border: '2px solid var(--border)',
+                    borderRadius: '8px',
+                    padding: '6px 10px',
+                    fontSize: '0.85rem',
+                    fontFamily: 'var(--font-main)',
+                    background: '#FAFAFA',
+                    color: 'var(--text-dark)',
+                    outline: 'none'
+                  }}
+                />
+              </div>
+
+              {(orderSearch || startDate || endDate) && (
+                <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'flex-end' }}>
+                  <button
+                    onClick={() => { setOrderSearch(''); setStartDate(''); setEndDate(''); }}
+                    style={{
+                      border: '2px solid #EF4444',
+                      borderRadius: '50px',
+                      padding: '8px 16px',
+                      background: '#FEF2F2',
+                      color: '#EF4444',
+                      fontFamily: 'var(--font-main)',
+                      fontWeight: 700,
+                      fontSize: '0.8rem',
+                      cursor: 'pointer',
+                      width: '100%',
+                      textAlign: 'center'
+                    }}
+                  >
+                    Clear Filters
+                  </button>
+                </div>
+              )}
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px', flexWrap: 'wrap', gap: '10px' }}>
+              <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '4px', flex: 1 }}>
+                {['all', ...STATUS_OPTIONS].map(status => (
+                  <button
+                    key={status}
+                    onClick={() => setStatusFilter(status)}
+                    style={{
+                      ...chipStyle,
+                      background: statusFilter === status ? 'var(--saffron)' : '#FFFFFF',
+                      color: statusFilter === status ? '#FFFFFF' : 'var(--text-mid)',
+                      borderColor: statusFilter === status ? 'var(--saffron)' : 'var(--border)',
+                    }}
+                  >
+                    {status === 'all' ? 'All' : STATUS_LABELS[status]}
+                  </button>
+                ))}
+              </div>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button
+                  onClick={handleExportExcel}
+                  disabled={loading}
+                  style={exportButtonStyle('#DCFCE7', '#15803D')}
+                  title="Export all orders to Excel/CSV"
                 >
-                  {status === 'all' ? 'All' : STATUS_LABELS[status]}
+                  📊 Export Excel
                 </button>
-              ))}
+                <button
+                  onClick={handleExportPDF}
+                  disabled={loading}
+                  style={exportButtonStyle('#FEE2E2', '#B91C1C')}
+                  title="Export all orders to PDF Report"
+                >
+                  📄 Export PDF
+                </button>
+              </div>
             </div>
             {loading ? (
               <AdminListSkeleton count={6} />
@@ -735,8 +1099,30 @@ export default function AdminPage() {
                 {filteredOrders.map(order => (
                   <div key={order._id} style={{ ...panelStyle, opacity: order.pending ? 0.65 : 1 }}>
                     <OrderRow order={order} />
-                    <div style={{ marginTop: '10px', fontSize: '0.8rem', color: '#4B5563' }}>
-                      {order.items?.map(item => `${item.name} x${item.qty}`).join(', ')}
+                    <div style={{ marginTop: '10px', background: '#F9FAFB', border: '1px solid #E5E7EB', borderRadius: '8px', padding: '8px 12px' }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                        {order.items?.map((item, idx) => (
+                          <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.82rem', paddingBottom: idx < order.items.length - 1 ? '6px' : '0', borderBottom: idx < order.items.length - 1 ? '1px solid #E5E7EB' : 'none' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                              <span style={{ fontSize: '1.2rem' }}>{item.emoji || '🫙'}</span>
+                              <div>
+                                <span style={{ fontWeight: 800, color: 'var(--text-dark)' }}>{item.name}</span>
+                                <div style={{ fontSize: '0.72rem', color: '#6B7280' }}>
+                                  {item.brand} {item.weight && `• ${item.weight}`}
+                                </div>
+                              </div>
+                            </div>
+                            <div style={{ textAlign: 'right' }}>
+                              <div style={{ fontWeight: 800, color: item.isNegotiable ? '#7C3AED' : '#15803D' }}>
+                                {item.isNegotiable ? 'Negotiable' : formatPrice(item.price * item.qty)}
+                              </div>
+                              <div style={{ fontSize: '0.75rem', color: '#6B7280' }}>
+                                {item.isNegotiable ? '' : `${formatPrice(item.price)} × `}{item.qty}
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
                     </div>
                     <div style={{ marginTop: '8px', fontSize: '0.78rem', color: '#6B7280' }}>
                       Shop Name: {order.deliveryAddress || order.user?.address || 'Not provided'}
@@ -774,9 +1160,11 @@ export default function AdminPage() {
                           <option key={status} value={status}>{STATUS_LABELS[status]}</option>
                         ))}
                       </select>
-                      <button onClick={() => handleDeleteOrder(order._id)} aria-label="Delete order" style={iconButtonStyle('#FEE2E2', 'var(--red-badge)')}>
-                        <Trash2 size={16} />
-                      </button>
+                      {user?.role === 'admin' && (
+                        <button onClick={() => handleDeleteOrder(order._id)} aria-label="Delete order" style={iconButtonStyle('#FEE2E2', 'var(--red-badge)')}>
+                          <Trash2 size={16} />
+                        </button>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -822,9 +1210,11 @@ export default function AdminPage() {
                     <button onClick={() => openProductModal(product)} aria-label="Edit product" style={iconButtonStyle('var(--saffron-light)', 'var(--saffron-dark)')}>
                       <Edit2 size={16} />
                     </button>
-                    <button onClick={() => handleDeleteProduct(product._id)} aria-label="Delete product" style={iconButtonStyle('#FEE2E2', 'var(--red-badge)')}>
-                      <Trash2 size={16} />
-                    </button>
+                    {user?.role === 'admin' && (
+                      <button onClick={() => handleDeleteProduct(product._id)} aria-label="Delete product" style={iconButtonStyle('#FEE2E2', 'var(--red-badge)')}>
+                        <Trash2 size={16} />
+                      </button>
+                    )}
                   </div>
                 ))}
               </div>
@@ -876,9 +1266,11 @@ export default function AdminPage() {
                     <button onClick={() => openUserModal(item)} aria-label="Edit user" style={iconButtonStyle('var(--saffron-light)', 'var(--saffron-dark)')}>
                       <Edit2 size={16} />
                     </button>
-                    <button onClick={() => handleDeleteUser(item._id)} aria-label="Delete user" style={iconButtonStyle('#FEE2E2', 'var(--red-badge)')}>
-                      <Trash2 size={16} />
-                    </button>
+                    {user?.role === 'admin' && (
+                      <button onClick={() => handleDeleteUser(item._id)} aria-label="Delete user" style={iconButtonStyle('#FEE2E2', 'var(--red-badge)')}>
+                        <Trash2 size={16} />
+                      </button>
+                    )}
                   </div>
                 ))}
               </div>
@@ -1435,3 +1827,20 @@ const modalActionsStyle = {
   gap: '12px',
   marginTop: '8px',
 }
+
+const exportButtonStyle = (background, color) => ({
+  border: 'none',
+  borderRadius: '50px',
+  padding: '8px 16px',
+  background,
+  color,
+  fontFamily: 'var(--font-main)',
+  fontWeight: 700,
+  fontSize: '0.8rem',
+  cursor: 'pointer',
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: '6px',
+  boxShadow: 'var(--shadow-sm)',
+  transition: 'all 0.2s',
+})
