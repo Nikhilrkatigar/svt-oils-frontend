@@ -969,6 +969,102 @@ h1, h2, h3, h4, h5 {
 .status-delivered { background: var(--green-light); color: #14532D; }
 .status-cancelled { background: #FEE2E2; color: #991B1B; }
 
+/* ===== ADMIN POLISH ===== */
+/* Horizontally-scrollable tab bar (fixes 6-tab cramping on phones) */
+.admin-tabs {
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  scroll-behavior: smooth;
+}
+
+.admin-tabs::-webkit-scrollbar { display: none; }
+
+.admin-tab-btn {
+  min-width: 0;
+  padding: 12px 6px;
+  border: none;
+  border-bottom: 3px solid transparent;
+  background: #FFFFFF;
+  color: var(--text-light);
+  font-family: var(--font-main);
+  font-size: 0.75rem;
+  font-weight: 800;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s, border-color 0.2s;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  line-height: 1;
+}
+
+.admin-tab-btn:hover {
+  color: var(--saffron-dark);
+  background: #FFFBF0;
+}
+
+.admin-tab-btn.active {
+  border-bottom-color: var(--saffron);
+  background: var(--saffron-light);
+  color: var(--saffron-dark);
+}
+
+/* On phones, let tabs size to content and scroll instead of squeezing */
+@media (max-width: 640px) {
+  .admin-tabs {
+    display: flex !important;
+    flex-wrap: nowrap;
+  }
+  .admin-tab-btn {
+    flex: 0 0 auto;
+    min-width: 78px;
+    padding: 12px 14px;
+  }
+}
+
+/* Card press/hover feedback */
+.admin-item-card {
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.admin-item-card:hover {
+  box-shadow: var(--shadow-md);
+}
+
+.admin-item-card:active {
+  transform: scale(0.99);
+}
+
+/* Larger, touch-friendly icon buttons on phones */
+@media (max-width: 640px) {
+  .admin-icon-btn {
+    width: 42px !important;
+    height: 42px !important;
+  }
+}
+
+/* Smooth section entrance when switching tabs */
+.admin-section {
+  animation: fadeUp 0.28s ease;
+}
+
+/* Dashboard metric cards: 3-up, collapse to 1 clean column on small phones */
+.admin-metric-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+@media (max-width: 560px) {
+  .admin-metric-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+  .admin-metric-grid > :last-child:nth-child(odd) {
+    grid-column: 1 / -1;
+  }
+}
+
 /* ===== DESKTOP LAYOUT ===== */
 @media (min-width: 900px) {
   body {

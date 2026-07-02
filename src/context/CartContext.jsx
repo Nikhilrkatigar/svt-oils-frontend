@@ -55,10 +55,12 @@ export function CartProvider({ children }) {
     return item ? item.qty : 0
   }
 
+  const setCartItems = (newItems) => setItems(newItems)
+
   return (
     <CartContext.Provider value={{
       items, addItem, removeItem, updateQty, clearCart,
-      totalItems, totalPrice, hasNegotiable, getQty
+      totalItems, totalPrice, hasNegotiable, getQty, setCartItems
     }}>
       {children}
     </CartContext.Provider>

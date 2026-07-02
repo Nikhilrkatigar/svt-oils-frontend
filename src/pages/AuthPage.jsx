@@ -63,6 +63,10 @@ export default function AuthPage() {
     if (!pinCode) { addToast('Please enter your pin code', 'error'); return }
     if (pinCode.length !== 6) { addToast('Pin Code must be 6 digits', 'error'); return }
     if (!address.trim()) { addToast('Please enter your shop name', 'error'); return }
+    if (gstNumber.trim() && !/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/.test(gstNumber.trim())) {
+      addToast('Please enter a valid 15-character GST Number (e.g. 29AAAAA1111A1Z5)', 'error')
+      return
+    }
 
     setLoading(true)
     try {

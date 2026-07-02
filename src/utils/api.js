@@ -72,6 +72,7 @@ export const orderApi = {
   all: (params) => API.get('/orders/admin/all', { params }),
   updateStatus: (id, status) => API.patch(`/orders/${id}/status`, { status }),
   delete: (id) => API.delete(`/orders/${id}`),
+  exportAll: () => API.get('/orders/admin/export', { responseType: 'text' }),
 }
 
 // Location
@@ -82,6 +83,7 @@ export const locationApi = {
 // Admin
 export const adminApi = {
   dashboard: () => API.get('/admin/dashboard'),
+  visitors: (params) => API.get('/admin/visitors', { params }),
   users: (params) => API.get('/admin/users', { params }),
   userDetail: (id) => API.get(`/admin/users/${id}`),
   createUser: (data) => API.post('/admin/users', data),

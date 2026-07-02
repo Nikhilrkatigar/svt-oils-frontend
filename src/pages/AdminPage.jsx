@@ -14,6 +14,7 @@ import {
   Save,
   Search,
   Trash2,
+  TrendingUp,
   Users,
   X,
   Settings as SettingsIcon,
@@ -146,6 +147,8 @@ export default function AdminPage() {
   const [orders, setOrders] = useState([])
   const [products, setProducts] = useState([])
   const [users, setUsers] = useState([])
+  const [visitors, setVisitors] = useState([])
+  const [visitorSearch, setVisitorSearch] = useState('')
   const [loading, setLoading] = useState(true)
   const [statusFilter, setStatusFilter] = useState('all')
   const [userSearch, setUserSearch] = useState('')
@@ -181,17 +184,19 @@ export default function AdminPage() {
   const fetchAll = async () => {
     setLoading(true)
     try {
-      const [statsRes, ordersRes, productsRes, usersRes, settingsRes] = await Promise.all([
+      const [statsRes, ordersRes, productsRes, usersRes, visitorsRes, settingsRes] = await Promise.all([
         adminApi.dashboard(),
         orderApi.all({ limit: 100 }),
         productApi.getAll({ limit: 200 }),
         adminApi.users({ limit: 100 }),
+        adminApi.visitors({ limit: 100 }).catch(() => ({ data: { visitors: [] } })),
         settingsApi.get().catch(() => ({ data: { bulkOrderPhone: '', supportPhone: '' } })),
       ])
       setStats(statsRes.data)
       setOrders(ordersRes.data.orders || [])
       setProducts(productsRes.data.products || [])
       setUsers(usersRes.data.users || [])
+      setVisitors(visitorsRes.data.visitors || [])
       setSettingsForm(settingsRes.data || { bulkOrderPhone: '', supportPhone: '' })
     } catch (err) {
       addToast(err.response?.data?.message || 'Failed to load admin data', 'error')
@@ -258,6 +263,22 @@ export default function AdminPage() {
       item.role?.toLowerCase().includes(search)
     )
   }, [users, userSearch])
+
+  const filteredVisitors = useMemo(() => {
+    const search = visitorSearch.trim().toLowerCase()
+    const base = search
+      ? visitors.filter(item =>
+          item.name?.toLowerCase().includes(search) ||
+          item.phone?.includes(search)
+        )
+      : visitors
+    return [...base].sort((a, b) => (b.visitCount || 0) - (a.visitCount || 0))
+  }, [visitors, visitorSearch])
+
+  const totalVisits = useMemo(
+    () => visitors.reduce((sum, item) => sum + (item.visitCount || 0), 0),
+    [visitors]
+  )
 
   const openProductModal = (product = null) => {
     if (product) {
@@ -470,83 +491,15 @@ export default function AdminPage() {
     })
   }
 
-  const handleExportExcel = () => {
+  const handleExportExcel = async () => {
     try {
-      const allOrders = filteredOrders
-      
-      if (allOrders.length === 0) {
-        addToast('No orders found to export', 'info')
-        return
-      }
-
-      const headers = [
-        'Order ID', 'Date', 'Status', 'Customer Name', 'Customer Phone',
-        'Secondary Phone', 'Shop Name / Address', 'GST Number', 'Pin Code',
-        'Item Name', 'Item Brand', 'Item Weight', 'Quantity', 'Unit Price',
-        'Item Subtotal', 'Is Negotiable Item', 'Order Total', 'Negotiable Order', 'Note'
-      ]
-
-      const escapeCsv = (val) => {
-        if (val == null) return ''
-        const str = String(val)
-        if (str.includes(',') || str.includes('"') || str.includes('\n') || str.includes('\r')) {
-          return '"' + str.replace(/"/g, '""') + '"'
-        }
-        return str
-      }
-
-      const rows = []
-      rows.push(headers.join(','))
-
-      allOrders.forEach(order => {
-        const orderId = order.orderId || order._id
-        const orderDate = new Date(order.createdAt).toLocaleString('en-IN')
-        const orderStatus = order.status
-        const customerName = order.user?.name || 'Unknown'
-        const customerPhone = order.phone || order.user?.phone || ''
-        const secondaryPhone = order.user?.secondaryPhone || ''
-        const shopAddress = order.deliveryAddress || ''
-        const gstNumber = order.user?.gstNumber || ''
-        const pinCode = order.user?.pinCode || ''
-        const orderTotal = order.total || 0
-        const isNegotiableOrder = order.hasNegotiable ? 'Yes' : 'No'
-        const orderNote = order.note || ''
-
-        if (!order.items || order.items.length === 0) {
-          const rowData = [
-            orderId, orderDate, orderStatus, customerName, customerPhone,
-            secondaryPhone, shopAddress, gstNumber, pinCode,
-            '', '', '', '', '', '', '',
-            orderTotal, isNegotiableOrder, orderNote
-          ]
-          rows.push(rowData.map(escapeCsv).join(','))
-        } else {
-          order.items.forEach(item => {
-            const itemName = item.name || ''
-            const itemBrand = item.brand || ''
-            const itemWeight = item.weight || ''
-            const qty = item.qty || 0
-            const unitPrice = item.price || 0
-            const itemSubtotal = unitPrice * qty
-            const isNegotiableItem = item.isNegotiable ? 'Yes' : 'No'
-
-            const rowData = [
-              orderId, orderDate, orderStatus, customerName, customerPhone,
-              secondaryPhone, shopAddress, gstNumber, pinCode,
-              itemName, itemBrand, itemWeight, qty, unitPrice, itemSubtotal, isNegotiableItem,
-              orderTotal, isNegotiableOrder, orderNote
-            ]
-            rows.push(rowData.map(escapeCsv).join(','))
-          })
-        }
-      })
-
-      const csvContent = '\uFEFF' + rows.join('\r\n')
-      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+      setLoading(true)
+      const res = await orderApi.exportAll()
+      const blob = new Blob(['\uFEFF' + res.data], { type: 'text/csv;charset=utf-8;' })
       const url = URL.createObjectURL(blob)
       const link = document.createElement('a')
       link.setAttribute('href', url)
-      link.setAttribute('download', `SVT_Oils_Orders_${new Date().toISOString().slice(0, 10)}.csv`)
+      link.setAttribute('download', `SVT_Oils_All_Orders_${new Date().toISOString().slice(0, 10)}.csv`)
       link.style.visibility = 'hidden'
       document.body.appendChild(link)
       link.click()
@@ -554,6 +507,8 @@ export default function AdminPage() {
       addToast('Orders exported successfully to Excel/CSV! 📊', 'success')
     } catch (err) {
       addToast('Failed to export to Excel', 'error')
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -702,6 +657,10 @@ export default function AdminPage() {
       addToast('Pin Code must be 6 digits', 'error')
       return
     }
+    if (userForm.gstNumber?.trim() && !/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/.test(userForm.gstNumber.trim())) {
+      addToast('Please enter a valid 15-character GST Number', 'error')
+      return
+    }
 
     const payload = {
       name: userForm.name,
@@ -766,6 +725,7 @@ export default function AdminPage() {
     { key: 'orders', label: 'Orders', icon: ClipboardList },
     { key: 'products', label: 'Products', icon: Package },
     { key: 'users', label: 'Users', icon: Users },
+    { key: 'visitors', label: 'Visitors', icon: TrendingUp },
     { key: 'settings', label: 'Settings', icon: SettingsIcon },
   ]
 
@@ -776,6 +736,7 @@ export default function AdminPage() {
           <button
             onClick={() => navigate('/')}
             aria-label="Back"
+            className="admin-icon-btn"
             style={iconButtonStyle('rgba(255,255,255,0.2)', '#FFFFFF')}
           >
             <ChevronLeft size={20} />
@@ -784,37 +745,29 @@ export default function AdminPage() {
             <div style={{ fontWeight: 800, fontSize: '1.3rem', letterSpacing: '-0.5px' }}>Admin <span style={{ color: 'var(--amber)' }}>Panel</span></div>
             <div style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.85)', fontWeight: 600 }}>SVT Oils Management</div>
           </div>
-          <button onClick={fetchAll} disabled={loading} style={iconButtonStyle('rgba(255,255,255,0.2)', '#FFFFFF')} title="Refresh">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"></path><path d="M21 3v5h-5"></path></svg>
+          <button onClick={fetchAll} disabled={loading} className="admin-icon-btn" style={iconButtonStyle('rgba(255,255,255,0.2)', '#FFFFFF')} title="Refresh" aria-label="Refresh data">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={loading ? 'spin-icon' : undefined}><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"></path><path d="M21 3v5h-5"></path></svg>
           </button>
-          <button onClick={handleLogout} style={iconButtonStyle('rgba(255,255,255,0.2)', '#FFFFFF')} title="Logout">
+          <button onClick={handleLogout} className="admin-icon-btn" style={iconButtonStyle('rgba(255,255,255,0.2)', '#FFFFFF')} title="Logout" aria-label="Logout">
             <LogOut size={18} />
           </button>
         </div>
 
-        <nav className="admin-tabs" style={{ display: 'grid', gridTemplateColumns: 'repeat(5, minmax(0, 1fr))', background: 'white', borderRadius: '20px 20px 0 0', overflow: 'hidden', boxShadow: '0 -4px 10px rgba(0,0,0,0.05)' }}>
+        <nav className="admin-tabs" style={{ display: 'grid', gridTemplateColumns: `repeat(${tabs.length}, minmax(0, 1fr))`, background: 'white', borderRadius: '20px 20px 0 0', boxShadow: '0 -4px 10px rgba(0,0,0,0.05)' }}>
           {tabs.map(item => {
             const Icon = item.icon
             const active = tab === item.key
             return (
               <button
                 key={item.key}
-                onClick={() => setTab(item.key)}
-                style={{
-                  minWidth: 0,
-                  padding: '12px 4px',
-                  border: 'none',
-                  borderBottom: active ? '3px solid var(--saffron)' : '3px solid transparent',
-                  background: active ? 'var(--saffron-light)' : '#FFFFFF',
-                  color: active ? 'var(--saffron-dark)' : 'var(--text-light)',
-                  fontFamily: 'var(--font-main)',
-                  fontSize: '0.75rem',
-                  fontWeight: 800,
-                  cursor: 'pointer',
-                  transition: 'all 0.2s',
+                onClick={(event) => {
+                  setTab(item.key)
+                  event.currentTarget.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' })
                 }}
+                className={`admin-tab-btn${active ? ' active' : ''}`}
+                aria-current={active ? 'page' : undefined}
               >
-                <Icon size={18} style={{ display: 'block', margin: '0 auto 4px' }} />
+                <Icon size={18} />
                 {item.label}
               </button>
             )
@@ -824,7 +777,7 @@ export default function AdminPage() {
 
       <main className="admin-main" style={{ padding: '14px', maxWidth: '1100px', margin: '0 auto' }}>
         {tab === 'dashboard' && (
-          <section>
+          <section className="admin-section">
             {loading ? (
               <DashboardSkeleton />
             ) : (
@@ -866,7 +819,7 @@ export default function AdminPage() {
                 )}
 
                 {/* 3. Metric Cards */}
-                <div style={gridStyle}>
+                <div className="admin-metric-grid">
                   <div style={{ ...panelStyle, borderTop: '4px solid #3B82F6' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       <span style={{ color: '#3B82F6', fontSize: '0.85rem', fontWeight: 800 }}>Total Orders</span>
@@ -924,16 +877,21 @@ export default function AdminPage() {
                               'No items'
                             ) : (
                               <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                <div style={{ fontSize: '0.72rem', fontWeight: 900, color: 'var(--saffron-dark)', marginBottom: '2px' }}>
+                                  🛒 {order.items.length} {order.items.length === 1 ? 'product' : 'products'} · {order.items.reduce((sum, it) => sum + (it.qty || 0), 0)} items total
+                                </div>
                                 {order.items.map((item, idx) => (
-                                  <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.78rem' }}>
-                                    <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                  <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px', fontSize: '0.78rem' }}>
+                                    <span style={{ display: 'flex', alignItems: 'center', gap: '6px', minWidth: 0 }}>
                                       <span>{item.emoji || '🫙'}</span>
                                       <strong style={{ color: '#374151' }}>{item.name}</strong>
                                       {item.weight && <span style={{ color: '#6B7280' }}>({item.weight})</span>}
-                                      <span style={{ color: '#9CA3AF', fontWeight: 'bold' }}>x{item.qty}</span>
                                     </span>
-                                    <span style={{ color: item.isNegotiable ? '#7C3AED' : '#15803D', fontWeight: 800 }}>
-                                      {item.isNegotiable ? 'Negotiable' : formatPrice(item.price * item.qty)}
+                                    <span style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+                                      <span style={{ background: '#FFEDD5', color: 'var(--saffron-dark)', borderRadius: '999px', padding: '1px 8px', fontWeight: 900, whiteSpace: 'nowrap' }}>Qty: {item.qty}</span>
+                                      <span style={{ color: item.isNegotiable ? '#7C3AED' : '#15803D', fontWeight: 800, whiteSpace: 'nowrap' }}>
+                                        {item.isNegotiable ? 'Negotiable' : formatPrice(item.price * item.qty)}
+                                      </span>
                                     </span>
                                   </div>
                                 ))}
@@ -964,7 +922,7 @@ export default function AdminPage() {
         )}
 
         {tab === 'orders' && (
-          <section>
+          <section className="admin-section">
             <div style={{
               background: '#FFFFFF',
               border: '1px solid var(--border)',
@@ -1099,25 +1057,41 @@ export default function AdminPage() {
                 {filteredOrders.map(order => (
                   <div key={order._id} style={{ ...panelStyle, opacity: order.pending ? 0.65 : 1 }}>
                     <OrderRow order={order} />
-                    <div style={{ marginTop: '10px', background: '#F9FAFB', border: '1px solid #E5E7EB', borderRadius: '8px', padding: '8px 12px' }}>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    <div style={{ marginTop: '10px', background: '#F9FAFB', border: '1px solid #E5E7EB', borderRadius: '10px', overflow: 'hidden' }}>
+                      {/* Summary header: how many products and total units */}
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px', padding: '8px 12px', background: '#FEF3E2', borderBottom: '1px solid #F3E8D6' }}>
+                        <span style={{ fontSize: '0.78rem', fontWeight: 900, color: 'var(--saffron-dark)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          🛒 {order.items?.length || 0} {(order.items?.length || 0) === 1 ? 'Product' : 'Products'}
+                        </span>
+                        <span style={{ fontSize: '0.78rem', fontWeight: 900, color: 'var(--saffron-dark)' }}>
+                          {order.items?.reduce((sum, it) => sum + (it.qty || 0), 0) || 0} items total
+                        </span>
+                      </div>
+                      {/* Per-item breakdown */}
+                      <div style={{ display: 'flex', flexDirection: 'column' }}>
                         {order.items?.map((item, idx) => (
-                          <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.82rem', paddingBottom: idx < order.items.length - 1 ? '6px' : '0', borderBottom: idx < order.items.length - 1 ? '1px solid #E5E7EB' : 'none' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                              <span style={{ fontSize: '1.2rem' }}>{item.emoji || '🫙'}</span>
-                              <div>
-                                <span style={{ fontWeight: 800, color: 'var(--text-dark)' }}>{item.name}</span>
+                          <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '10px', fontSize: '0.82rem', padding: '10px 12px', borderBottom: idx < order.items.length - 1 ? '1px solid #EEEEEE' : 'none' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0 }}>
+                              <span style={{ fontSize: '1.5rem', flexShrink: 0 }}>{item.emoji || '🫙'}</span>
+                              <div style={{ minWidth: 0 }}>
+                                <div style={{ fontWeight: 800, color: 'var(--text-dark)' }}>{item.name}</div>
                                 <div style={{ fontSize: '0.72rem', color: '#6B7280' }}>
-                                  {item.brand} {item.weight && `• ${item.weight}`}
+                                  {[item.brand, item.weight].filter(Boolean).join(' • ') || '—'}
+                                </div>
+                                <div style={{ fontSize: '0.72rem', color: '#9CA3AF', marginTop: '2px' }}>
+                                  {item.isNegotiable
+                                    ? `Qty: ${item.qty} · Price on request`
+                                    : `${formatPrice(item.price)} each × ${item.qty} qty`}
                                 </div>
                               </div>
                             </div>
-                            <div style={{ textAlign: 'right' }}>
-                              <div style={{ fontWeight: 800, color: item.isNegotiable ? '#7C3AED' : '#15803D' }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px', flexShrink: 0 }}>
+                              {/* Prominent, clearly-labelled quantity */}
+                              <span style={{ background: '#FFEDD5', color: 'var(--saffron-dark)', borderRadius: '999px', padding: '2px 10px', fontSize: '0.72rem', fontWeight: 900, whiteSpace: 'nowrap' }}>
+                                Qty: {item.qty}
+                              </span>
+                              <div style={{ fontWeight: 900, color: item.isNegotiable ? '#7C3AED' : '#15803D', whiteSpace: 'nowrap' }}>
                                 {item.isNegotiable ? 'Negotiable' : formatPrice(item.price * item.qty)}
-                              </div>
-                              <div style={{ fontSize: '0.75rem', color: '#6B7280' }}>
-                                {item.isNegotiable ? '' : `${formatPrice(item.price)} × `}{item.qty}
                               </div>
                             </div>
                           </div>
@@ -1174,7 +1148,7 @@ export default function AdminPage() {
         )}
 
         {tab === 'products' && (
-          <section>
+          <section className="admin-section">
             <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '10px' }}>
               <button onClick={() => openProductModal()} style={primaryButtonStyle}>
                 <Plus size={18} /> Add Product
@@ -1223,7 +1197,7 @@ export default function AdminPage() {
         )}
 
         {tab === 'users' && (
-          <section>
+          <section className="admin-section">
             <div style={{ display: 'flex', gap: '8px', marginBottom: '10px' }}>
               <div style={{ ...panelStyle, padding: '0 10px', flex: 1, display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <Search size={17} color="#6B7280" />
@@ -1246,7 +1220,7 @@ export default function AdminPage() {
             ) : (
               <div className="admin-card-grid" style={{ display: 'grid', gap: '10px' }}>
                 {filteredUsers.map(item => (
-                  <div key={item._id} style={{ ...panelStyle, display: 'flex', gap: '12px', alignItems: 'center', opacity: item.pending ? 0.65 : 1 }}>
+                  <div key={item._id} className="admin-item-card" style={{ ...panelStyle, display: 'flex', gap: '12px', alignItems: 'center', opacity: item.pending ? 0.65 : 1 }}>
                     <div style={{ width: '44px', height: '44px', borderRadius: '50%', background: 'var(--saffron-light)', color: 'var(--saffron-dark)', display: 'grid', placeItems: 'center', fontWeight: 900 }}>
                       {item.name?.[0]?.toUpperCase() || 'U'}
                     </div>
@@ -1263,11 +1237,11 @@ export default function AdminPage() {
                         {item.address || 'No shop name'}
                       </div>
                     </div>
-                    <button onClick={() => openUserModal(item)} aria-label="Edit user" style={iconButtonStyle('var(--saffron-light)', 'var(--saffron-dark)')}>
+                    <button onClick={() => openUserModal(item)} aria-label="Edit user" className="admin-icon-btn" style={iconButtonStyle('var(--saffron-light)', 'var(--saffron-dark)')}>
                       <Edit2 size={16} />
                     </button>
                     {user?.role === 'admin' && (
-                      <button onClick={() => handleDeleteUser(item._id)} aria-label="Delete user" style={iconButtonStyle('#FEE2E2', 'var(--red-badge)')}>
+                      <button onClick={() => handleDeleteUser(item._id)} aria-label="Delete user" className="admin-icon-btn" style={iconButtonStyle('#FEE2E2', 'var(--red-badge)')}>
                         <Trash2 size={16} />
                       </button>
                     )}
@@ -1278,8 +1252,61 @@ export default function AdminPage() {
           </section>
         )}
 
+        {tab === 'visitors' && (
+          <section className="admin-section">
+            <div style={{ display: 'flex', gap: '8px', marginBottom: '10px' }}>
+              <div style={{ ...panelStyle, padding: '14px 16px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <TrendingUp size={20} color="var(--saffron-dark)" />
+                <div>
+                  <div style={{ fontWeight: 900, fontSize: '1.2rem', lineHeight: 1 }}>{totalVisits}</div>
+                  <div style={{ fontSize: '0.72rem', color: 'var(--text-mid)', fontWeight: 600 }}>Total visits</div>
+                </div>
+              </div>
+              <div style={{ ...panelStyle, padding: '0 10px', flex: 1, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Search size={17} color="#6B7280" />
+                <input
+                  value={visitorSearch}
+                  onChange={event => setVisitorSearch(event.target.value)}
+                  placeholder="Search visitors"
+                  style={{ border: 'none', outline: 'none', flex: 1, padding: '12px 0', fontFamily: 'Baloo 2, sans-serif', background: 'transparent' }}
+                />
+              </div>
+            </div>
+
+            {loading ? (
+              <AdminListSkeleton count={6} withAvatar />
+            ) : filteredVisitors.length === 0 ? (
+              <EmptyText text="No visitors yet." />
+            ) : (
+              <div className="admin-card-grid" style={{ display: 'grid', gap: '10px' }}>
+                {filteredVisitors.map((item, index) => (
+                  <div key={item._id} className="admin-item-card" style={{ ...panelStyle, display: 'flex', gap: '12px', alignItems: 'center' }}>
+                    <div style={{ width: '28px', fontWeight: 900, color: 'var(--text-mid)', textAlign: 'center', flexShrink: 0 }}>
+                      {index + 1}
+                    </div>
+                    <div style={{ width: '44px', height: '44px', borderRadius: '50%', background: 'var(--saffron-light)', color: 'var(--saffron-dark)', display: 'grid', placeItems: 'center', fontWeight: 900, flexShrink: 0 }}>
+                      {item.name?.[0]?.toUpperCase() || 'U'}
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontWeight: 900, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.name}</div>
+                      <div style={{ fontSize: '0.78rem', color: 'var(--text-mid)' }}>+91 {item.phone}</div>
+                      {item.lastLogin && (
+                        <div style={{ fontSize: '0.74rem', color: 'var(--text-mid)' }}>Last visit: {formatDate(item.lastLogin)}</div>
+                      )}
+                    </div>
+                    <div style={{ textAlign: 'center', flexShrink: 0, background: 'var(--saffron-light)', color: 'var(--saffron-dark)', borderRadius: '12px', padding: '6px 12px', minWidth: '58px' }}>
+                      <div style={{ fontWeight: 900, fontSize: '1.15rem', lineHeight: 1 }}>{item.visitCount || 0}</div>
+                      <div style={{ fontSize: '0.62rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px' }}>visits</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+        )}
+
         {tab === 'settings' && (
-          <section>
+          <section className="admin-section">
             <div style={{ ...panelStyle, maxWidth: '600px', margin: '0 auto', padding: '24px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '20px', borderBottom: '2px solid var(--border)', paddingBottom: '12px' }}>
                 <span style={{ fontSize: '1.4rem' }}>⚙️</span>

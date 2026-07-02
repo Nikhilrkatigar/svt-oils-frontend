@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { orderApi } from '../utils/api'
+import { useCart } from '../context/CartContext'
 import BottomNav from '../components/layout/BottomNav'
 import { ChevronLeft, ChevronRight, ExternalLink, Phone, MapPin } from 'lucide-react'
 import { format, parseISO } from 'date-fns'
@@ -60,11 +61,37 @@ const DEMO_ORDERS = [
 ]
 
 function OrderCard({ order, onClick }) {
+  const { setCartItems } = useCart()
+  const navigate = useNavigate()
   const cfg = STATUS_CONFIG[order.status] || STATUS_CONFIG.pending
   const itemSummary = order.items?.map(i => `${i.name}${i.weight ? ` (${i.weight})` : ''} x${i.qty}`).join(', ') || ''
   const dateStr = order.createdAt
     ? format(parseISO(order.createdAt), 'dd MMM yyyy')
     : ''
+
+  const handleReorderClick = (e) => {
+    e.stopPropagation()
+    if (!order?.items) return
+    const cartItems = order.items.map(item => {
+      const isNego = item.isNegotiable || item.price === 0;
+      return {
+        _id: item.product,
+        cartKey: item.variantId ? `${item.product}-${item.variantId}` : item.product,
+        variantId: item.variantId,
+        name: item.name,
+        brand: item.brand,
+        weight: item.weight,
+        imageUrl: item.imageUrl,
+        emoji: item.emoji,
+        price: isNego ? null : item.price,
+        discountPrice: null,
+        isNegotiable: isNego,
+        qty: item.qty,
+      }
+    })
+    setCartItems(cartItems)
+    navigate('/cart')
+  }
 
   return (
     <div className="order-card" onClick={onClick}>
@@ -85,9 +112,22 @@ function OrderCard({ order, onClick }) {
           <span style={{ fontWeight: '800', fontSize: '0.95rem' }}>
             {order.hasNegotiable && !order.total ? 'Price to be confirmed' : formatPrice(order.total)}
           </span>
-          <span style={{ color: '#C2410C', fontWeight: '700', fontSize: '0.82rem', display: 'flex', alignItems: 'center', gap: '2px' }}>
-            View Details <ChevronRight size={14} />
-          </span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <button
+              onClick={handleReorderClick}
+              style={{
+                padding: '5px 12px', border: '1px solid var(--saffron)',
+                background: '#FFFBEB', color: 'var(--saffron-dark)',
+                borderRadius: '50px', fontSize: '0.75rem', fontWeight: '800',
+                cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '3px'
+              }}
+            >
+              🔁 Reorder
+            </button>
+            <span style={{ color: '#C2410C', fontWeight: '700', fontSize: '0.82rem', display: 'flex', alignItems: 'center', gap: '2px' }}>
+              View Details <ChevronRight size={14} />
+            </span>
+          </div>
         </div>
       </div>
     </div>
@@ -160,6 +200,30 @@ function OrderDetailPage({ orderId }) {
   const [order, setOrder] = useState(null)
   const [loading, setLoading] = useState(true)
   const [cancelling, setCancelling] = useState(false)
+  const { setCartItems } = useCart()
+
+  const handleReorder = () => {
+    if (!order?.items) return
+    const cartItems = order.items.map(item => {
+      const isNego = item.isNegotiable || item.price === 0;
+      return {
+        _id: item.product,
+        cartKey: item.variantId ? `${item.product}-${item.variantId}` : item.product,
+        variantId: item.variantId,
+        name: item.name,
+        brand: item.brand,
+        weight: item.weight,
+        imageUrl: item.imageUrl,
+        emoji: item.emoji,
+        price: isNego ? null : item.price,
+        discountPrice: null,
+        isNegotiable: isNego,
+        qty: item.qty,
+      }
+    })
+    setCartItems(cartItems)
+    navigate('/cart')
+  }
 
   useEffect(() => {
     fetchOrder()
@@ -304,6 +368,23 @@ function OrderDetailPage({ orderId }) {
         )}
       </div>
 
+      {/* Reorder button */}
+      <div style={{ padding: '0 12px 12px' }}>
+        <button
+          onClick={handleReorder}
+          style={{
+            width: '100%', padding: '14px', border: 'none',
+            background: 'linear-gradient(135deg, var(--saffron-dark), var(--saffron))',
+            color: 'white', borderRadius: '50px',
+            fontFamily: 'Baloo 2, sans-serif', fontSize: '0.95rem', fontWeight: '700',
+            cursor: 'pointer', boxShadow: '0 4px 15px rgba(245,158,11,0.3)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px'
+          }}
+        >
+          🔁 Reorder Items Again
+        </button>
+      </div>
+
       {/* Cancel button */}
       {order.status === 'pending' && (
         <div style={{ padding: '0 12px 24px' }}>
@@ -323,6 +404,31 @@ function OrderDetailPage({ orderId }) {
       )}
 
       <BottomNav />
+    </div>
+  )
+}
+
+function OrdersSkeleton() {
+  return (
+    <div style={{ display: 'grid', gap: '12px', padding: '12px' }}>
+      {Array.from({ length: 3 }).map((_, i) => (
+        <div key={i} className="order-card" style={{ padding: '16px', background: 'white', borderRadius: '16px', border: '1px solid var(--border)', cursor: 'default', boxShadow: 'var(--shadow-sm)' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px', alignItems: 'center' }}>
+            <div>
+              <div className="skeleton" style={{ width: '80px', height: '18px', borderRadius: '4px' }} />
+              <div className="skeleton" style={{ width: '60px', height: '12px', marginTop: '6px', borderRadius: '4px' }} />
+            </div>
+            <div className="skeleton" style={{ width: '90px', height: '26px', borderRadius: '20px' }} />
+          </div>
+          <div style={{ borderTop: '1px solid #F5F5F4', paddingTop: '12px', marginTop: '8px' }}>
+            <div className="skeleton" style={{ width: '80%', height: '14px', marginBottom: '14px', borderRadius: '4px' }} />
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div className="skeleton" style={{ width: '100px', height: '18px', borderRadius: '4px' }} />
+              <div className="skeleton" style={{ width: '80px', height: '14px', borderRadius: '4px' }} />
+            </div>
+          </div>
+        </div>
+      ))}
     </div>
   )
 }
@@ -361,7 +467,7 @@ export default function OrdersPage() {
 
       <div style={{ paddingTop: '12px' }}>
         {loading ? (
-          <div className="spinner" />
+          <OrdersSkeleton />
         ) : orders.length === 0 ? (
           <div className="empty-state">
             <div className="emoji">📭</div>
